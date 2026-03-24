@@ -1,0 +1,10 @@
+services:
+  engine:
+    build:
+      context: .
+      target: dev
+    command: npm run dev -w packages/engine
+    volumes:
+      - ./packages/engine/src:/app/packages/engine/src
+    environment:
+      NODE_ENV: development

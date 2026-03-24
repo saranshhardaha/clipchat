@@ -1,0 +1,10 @@
+{
+  "name": "clipchat",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "npm run dev -w packages/engine",
+    "build": "npm run build -w packages/engine",
+    "test": "npm run test -w packages/engine"
+  }
+}
