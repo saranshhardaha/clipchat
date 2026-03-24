@@ -6,3 +6,4 @@ test-uploads
 packages/engine/test/fixtures/*.mp4
 packages/engine/test/fixtures/*.mp3
 packages/engine/test/fixtures/*.srt
+.worktrees
