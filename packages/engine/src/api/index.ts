@@ -5,6 +5,7 @@ import filesRouter from './routes/files.js';
 import jobsRouter from './routes/jobs.js';
 import toolsRouter from './routes/tools.js';
 import chatRouter from './routes/chat.js';
+import sessionsRouter from './routes/sessions.js';
 import { requireApiKey } from './middleware/auth.js';
 import { errorHandler } from './middleware/errors.js';
 
@@ -17,6 +18,7 @@ export function createApp() {
   app.use('/api/v1', jobsRouter);
   app.use('/api/v1', toolsRouter);
   app.use('/api/v1', requireApiKey, chatRouter);
+  app.use('/api/v1', requireApiKey, sessionsRouter);
   app.use(errorHandler);
   return app;
 }
