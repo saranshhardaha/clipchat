@@ -4,7 +4,8 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "dev": "npm run dev -w packages/engine",
-    "build": "npm run build -w packages/engine",
+    "dev:web": "npm run dev -w packages/web",
+    "build": "npm run build -w packages/engine && npm run build -w packages/web",
     "test": "npm run test -w packages/engine"
   }
 }

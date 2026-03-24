@@ -30,6 +30,18 @@ services:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
 
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    ports: ["3001:3001"]
+    environment:
+      ENGINE_URL: http://engine:3000
+      ENGINE_API_KEY: ${ENGINE_API_KEY}
+    depends_on:
+      engine:
+        condition: service_started
+
 volumes:
   pgdata:
   uploads:
