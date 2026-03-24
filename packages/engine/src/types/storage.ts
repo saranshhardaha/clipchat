@@ -1,3 +1,5 @@
+import type { Readable } from 'stream';
+
 export interface FileRecord {
   id: string;
   original_name: string;
@@ -9,7 +11,7 @@ export interface FileRecord {
 }
 
 export interface StorageAdapter {
-  save(buffer: Buffer, filename: string, mimeType: string): Promise<FileRecord>;
+  save(stream: Readable, originalName: string, mimeType: string, sizeBytes: number): Promise<FileRecord>;
   getPath(fileId: string): Promise<string>;
   getUrl(fileId: string): Promise<string>;
   delete(fileId: string): Promise<void>;
