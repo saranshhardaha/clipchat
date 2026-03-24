@@ -1,6 +1,7 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuid } from 'uuid';
+import type { Readable } from 'stream';
 import type { StorageAdapter, FileRecord } from '../types/storage.js';
 import { AppError } from '../types/job.js';
 
@@ -16,21 +17,22 @@ export class S3StorageAdapter implements StorageAdapter {
     this.s3 = new S3Client({ region, endpoint });
   }
 
-  async save(buffer: Buffer, filename: string, mimeType: string): Promise<FileRecord> {
+  async save(stream: Readable, originalName: string, mimeType: string, sizeBytes: number): Promise<FileRecord> {
     const id = uuid();
-    const ext = filename.split('.').pop() ?? 'bin';
+    const ext = originalName.split('.').pop() ?? 'bin';
     const key = `uploads/${id}.${ext}`;
     await this.s3.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
-      Body: buffer,
+      Body: stream,
       ContentType: mimeType,
+      ContentLength: sizeBytes,
     }));
     const record: FileRecord = {
       id,
-      original_name: filename,
+      original_name: originalName,
       mime_type: mimeType,
-      size_bytes: buffer.length,
+      size_bytes: sizeBytes,
       path: `s3://${this.bucket}/${key}`,
       url: await this.getSignedDownloadUrl(key),
       created_at: new Date(),

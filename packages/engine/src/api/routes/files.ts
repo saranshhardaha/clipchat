@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { createReadStream } from 'fs';
+import { Readable } from 'stream';
 import { createStorage } from '../../storage/index.js';
 import { AppError } from '../../types/job.js';
 import type { FileRecord } from '../../types/storage.js';
@@ -16,7 +17,7 @@ router.post('/files/upload', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) throw new AppError(400, 'No file uploaded');
     const storage = createStorage();
-    const record = await storage.save(req.file.buffer, req.file.originalname, req.file.mimetype);
+    const record = await storage.save(Readable.from(req.file.buffer), req.file.originalname, req.file.mimetype, req.file.size);
     fileCache.set(record.id, record);
     await db.insert(files).values({
       id: record.id,
