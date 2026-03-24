@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import os from 'os';
-import { createReadStream } from 'fs';
+import fs, { createReadStream } from 'fs';
 import { unlink } from 'fs/promises';
 import { createStorage } from '../../storage/index.js';
 import { AppError } from '../../types/job.js';
@@ -59,9 +59,38 @@ router.get('/files/:id/content', async (req, res, next) => {
   try {
     const [record] = await db.select().from(files).where(eq(files.id, req.params.id));
     if (!record) throw new AppError(404, 'File not found');
-    res.setHeader('Content-Type', record.mime_type);
-    res.setHeader('Accept-Ranges', 'bytes');
-    createReadStream(record.path).pipe(res);
+
+    const stat = await fs.promises.stat(record.path);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      const match = range.match(/^bytes=(\d+)-(\d*)$/);
+      if (!match) {
+        res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
+        return res.end();
+      }
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+      if (start > end || start >= fileSize || end >= fileSize) {
+        res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
+        return res.end();
+      }
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': end - start + 1,
+        'Content-Type': record.mime_type,
+      });
+      createReadStream(record.path, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': record.mime_type,
+        'Accept-Ranges': 'bytes',
+      });
+      createReadStream(record.path).pipe(res);
+    }
   } catch (err) { next(err); }
 });
 
