@@ -31,3 +31,21 @@ export const apiKeys = pgTable('api_keys', {
   label: text('label').notNull(),
   created_at: timestamp('created_at').defaultNow().notNull(),
 });
+
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey(),
+  api_key_id: text('api_key_id').notNull().references(() => apiKeys.id, { onDelete: 'cascade' }),
+  title: text('title'),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const chatMessages = pgTable('chat_messages', {
+  id: text('id').primaryKey(),
+  session_id: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user' | 'assistant' | 'tool'
+  content: text('content').notNull(),
+  tool_calls: jsonb('tool_calls'), // ChatCompletionMessageToolCall[] for assistant messages
+  tool_call_id: text('tool_call_id'),  // links tool-result row to its tool call
+  created_at: timestamp('created_at').defaultNow().notNull(),
+});
