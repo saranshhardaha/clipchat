@@ -13,6 +13,13 @@ const router = Router();
 const upload = multer({
   storage: multer.diskStorage({ destination: os.tmpdir() }),
   limits: { fileSize: 5 * 1024 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/^(video|audio)\//.test(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new AppError(415, `Unsupported file type: ${file.mimetype}. Only video and audio files are accepted.`) as unknown as null, false);
+    }
+  },
 });
 
 router.post('/files/upload', upload.single('file'), async (req, res, next) => {

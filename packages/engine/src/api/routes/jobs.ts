@@ -5,14 +5,42 @@ import { eq } from 'drizzle-orm';
 import { submitJob, getQueue } from '../../queue/index.js';
 import { AppError } from '../../types/job.js';
 import type { ToolName } from '../../types/job.js';
+import {
+  TrimVideoInputSchema, MergeClipsInputSchema, AddSubtitlesInputSchema,
+  AddTextOverlayInputSchema, ResizeVideoInputSchema, ExtractAudioInputSchema,
+  ReplaceAudioInputSchema, ChangeSpeedInputSchema, ExportVideoInputSchema,
+  GetVideoInfoInputSchema,
+} from '../../types/tools.js';
+
+const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; error?: { message: string }; data?: unknown } }> = {
+  trim_video:        TrimVideoInputSchema,
+  merge_clips:       MergeClipsInputSchema,
+  add_subtitles:     AddSubtitlesInputSchema,
+  add_text_overlay:  AddTextOverlayInputSchema,
+  resize_video:      ResizeVideoInputSchema,
+  extract_audio:     ExtractAudioInputSchema,
+  replace_audio:     ReplaceAudioInputSchema,
+  change_speed:      ChangeSpeedInputSchema,
+  export_video:      ExportVideoInputSchema,
+  get_video_info:    GetVideoInfoInputSchema,
+};
 
 const router = Router();
 
 router.post('/jobs', async (req, res, next) => {
   try {
-    const { tool, input } = req.body as { tool: ToolName; input: Record<string, unknown> };
-    if (!tool || !input) throw new AppError(400, 'tool and input are required');
-    const jobId = await submitJob(tool, input);
+    const { tool, input } = req.body;
+    if (!tool || typeof tool !== 'string' || !TOOL_SCHEMAS[tool]) {
+      throw new AppError(400, `Unknown tool: ${tool}`);
+    }
+    if (input === undefined || input === null) {
+      throw new AppError(400, 'input is required');
+    }
+    const parsed = TOOL_SCHEMAS[tool].safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(400, parsed.error!.message);
+    }
+    const jobId = await submitJob(tool as ToolName, parsed.data as Record<string, unknown>);
     await db.insert(jobs).values({
       id: jobId, status: 'queued', tool, input, output: null, progress: 0, error: null,
     });
