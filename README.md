@@ -82,10 +82,11 @@ HTTP Client / AI Agent / Web UI (:3001)
         ▼
   Express API (:3000)
   ├── POST /api/v1/files/upload       → LocalStorage / S3
+  ├── GET  /api/v1/files               → list files (paginated)
   ├── GET  /api/v1/files/:id/content  → stream raw bytes (range requests)
   ├── POST /api/v1/jobs               → BullMQ Queue (Redis)
   ├── GET  /api/v1/jobs/:id           → PostgreSQL (status poll)
-  ├── GET  /api/v1/jobs/:id/stream    → SSE progress stream
+  ├── GET  /api/v1/jobs/:id/stream    → SSE via BullMQ events (Redis pub/sub)
   ├── GET  /api/v1/tools              → tool manifest
   ├── POST /api/v1/chat               → OpenRouter streaming + tool calls → SSE
   ├── GET  /api/v1/sessions           → session list
@@ -112,7 +113,7 @@ HTTP Client / AI Agent / Web UI (:3001)
 
 **Job flow:** `POST /jobs` → BullMQ queue → worker → FFmpeg → DB update → client polls `GET /jobs/:id` or streams via SSE.
 
-**Chat flow:** `POST /chat { message, file_id? }` → OpenRouter streaming with tool calling → SSE events (`text`, `tool_call`, `done`). Tool calls submit jobs to BullMQ; all turns persisted to `sessions`/`chat_messages`.
+**Chat flow:** `POST /chat { message, file_id? }` → first LLM call streams tool calls → jobs submitted to BullMQ → polls DB until complete (max 60s) → second LLM call synthesizes results → SSE events (`text`, `tool_call`, `done`). All turns persisted to `sessions`/`chat_messages`.
 
 **MCP flow:** AI agent calls tool → FFmpeg runs synchronously → result returned immediately.
 
@@ -123,7 +124,8 @@ HTTP Client / AI Agent / Web UI (:3001)
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
-| `POST` | `/api/v1/files/upload` | Upload a video/audio file |
+| `POST` | `/api/v1/files/upload` | Upload a video/audio file (video/audio only) |
+| `GET` | `/api/v1/files` | List uploaded files (`?limit`, `?offset`) |
 | `GET` | `/api/v1/files/:id` | Get file metadata |
 | `GET` | `/api/v1/files/:id/content` | Stream file bytes (supports Range requests) |
 | `DELETE` | `/api/v1/files/:id` | Delete a file |
@@ -134,7 +136,7 @@ HTTP Client / AI Agent / Web UI (:3001)
 | `GET` | `/api/v1/tools` | List available tools |
 | `POST` | `/api/v1/tools/:name` | Direct tool invocation (async) |
 | `POST` | `/api/v1/chat` | AI chat with tool calling → SSE stream |
-| `GET` | `/api/v1/sessions` | List chat sessions |
+| `GET` | `/api/v1/sessions` | List chat sessions (`?limit`, `?offset`) |
 | `GET` | `/api/v1/sessions/:id/messages` | Fetch session message history |
 
 All `/api/v1/*` endpoints require `Authorization: Bearer <api-key>` header (except `GET /health`).
