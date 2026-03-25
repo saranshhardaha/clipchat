@@ -52,7 +52,7 @@ class ApiError extends Error {
 }
 
 async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000), ...init });
   if (!res.ok) {
     const text = await res.text();
     throw new ApiError(res.status, text);
@@ -62,7 +62,7 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
 
 export async function uploadFile(formData: FormData): Promise<FileRecord> {
   // Do NOT set Content-Type — browser sets it with the multipart boundary automatically
-  const res = await fetch('/api/files/upload', { method: 'POST', body: formData });
+  const res = await fetch('/api/files/upload', { method: 'POST', body: formData, signal: AbortSignal.timeout(120_000) });
   if (!res.ok) {
     const text = await res.text();
     throw new ApiError(res.status, text);
