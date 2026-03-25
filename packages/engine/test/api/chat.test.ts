@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import { createHash, randomBytes } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 // Mock the ai/tools module so we never hit real OpenRouter.
 // Must be called before any imports that transitively load the module.
@@ -31,7 +33,7 @@ vi.mock('../../src/ai/tools.js', async (importOriginal) => {
 
 import { createApp } from '../../src/api/index.js';
 import { db } from '../../src/db/index.js';
-import { apiKeys, sessions, chatMessages, jobs } from '../../src/db/schema.js';
+import { apiKeys, sessions, chatMessages, jobs, files } from '../../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 // Helper: collect full SSE body from a supertest response
@@ -192,5 +194,46 @@ describe('Chat API', () => {
     expect(job).toBeDefined();
     expect(job.tool).toBe('trim_video');
     expect(job.status).toBe('queued');
+  });
+
+  it('POST /chat with valid file_id injects file path via DB lookup', async () => {
+    // Create a temporary file on disk to simulate an uploaded file
+    const tmpPath = path.join(process.env.UPLOAD_DIR ?? './uploads', `test-chat-file-${Date.now()}.mp4`);
+    await fs.promises.mkdir(path.dirname(tmpPath), { recursive: true });
+    await fs.promises.writeFile(tmpPath, Buffer.alloc(100));
+
+    // Insert a file record directly into DB
+    const fileId = `file_chat_test_${Date.now().toString(36)}`;
+    await db.insert(files).values({
+      id: fileId,
+      original_name: 'test.mp4',
+      mime_type: 'video/mp4',
+      size_bytes: 100,
+      path: tmpPath,
+      url: `/files/${fileId}/content`,
+    });
+
+    try {
+      const { status, events } = await sseRequest(app, apiKey, {
+        message: 'What is in my video?',
+        file_id: fileId,
+      });
+
+      expect(status).toBe(200);
+      const doneEvents = events.filter(e => e.event === 'done');
+      expect(doneEvents.length).toBe(1);
+    } finally {
+      // Cleanup
+      await db.delete(files).where(eq(files.id, fileId));
+      await fs.promises.unlink(tmpPath).catch(() => {});
+    }
+  });
+
+  it('POST /chat with unknown file_id returns 404 error event', async () => {
+    const res = await request(app)
+      .post('/api/v1/chat')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ message: 'hello', file_id: 'file_does_not_exist' });
+    expect(res.status).toBe(404);
   });
 });

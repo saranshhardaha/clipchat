@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
+import fs from 'fs';
 import { createApp } from '../../src/api/index.js';
 import { TEST_VIDEO } from '../helpers/fixtures.js';
 
@@ -26,8 +27,16 @@ describe('Files API', () => {
   });
 
   it('DELETE /files/:id removes the file', async () => {
+    // First fetch the record to capture the on-disk path before deletion
+    const metaRes = await request(app).get(`/api/v1/files/${fileId}`);
+    expect(metaRes.status).toBe(200);
+    const filePath: string = metaRes.body.path;
+
     const res = await request(app).delete(`/api/v1/files/${fileId}`);
     expect(res.status).toBe(204);
+
+    // Verify the file was actually removed from disk
+    await expect(fs.promises.access(filePath)).rejects.toThrow();
   });
 
   it('GET /files/:id returns 404 after deletion', async () => {

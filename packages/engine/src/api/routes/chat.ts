@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import type { ChatCompletionMessageToolCall } from 'openai/resources/chat/completions.js';
 import { db } from '../../db/index.js';
-import { jobs } from '../../db/schema.js';
+import { jobs, files } from '../../db/schema.js';
+import { eq } from 'drizzle-orm';
 import { submitJob } from '../../queue/index.js';
-import { createStorage } from '../../storage/index.js';
 import { AppError } from '../../types/job.js';
 import type { ToolName } from '../../types/job.js';
 import type { ChatRequest } from '../../types/chat.js';
@@ -42,12 +42,10 @@ router.post('/chat', async (req, res, next) => {
     // Build system prompt, optionally injecting file path
     let systemPrompt = DEFAULT_SYSTEM;
     if (file_id) {
-      try {
-        const filePath = await createStorage().getPath(file_id);
-        systemPrompt = `${DEFAULT_SYSTEM}\n\nThe user's video file is at path: ${filePath}. Use this as the input_file parameter in tool calls unless the user specifies otherwise.`;
-      } catch {
-        throw new AppError(404, `File '${file_id}' not found`);
-      }
+      const [fileRecord] = await db.select().from(files).where(eq(files.id, file_id));
+      if (!fileRecord) throw new AppError(404, `File '${file_id}' not found`);
+      const filePath = fileRecord.path;
+      systemPrompt = `${DEFAULT_SYSTEM}\n\nThe user's video file is at path: ${filePath}. Use this as the input_file parameter in tool calls unless the user specifies otherwise.`;
     }
 
     // Persist user message + build history for Claude

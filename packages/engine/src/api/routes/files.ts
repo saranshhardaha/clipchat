@@ -48,8 +48,10 @@ router.get('/files/:id', async (req, res, next) => {
 
 router.delete('/files/:id', async (req, res, next) => {
   try {
+    const [record] = await db.select().from(files).where(eq(files.id, req.params.id));
+    if (!record) throw new AppError(404, 'File not found');
     const storage = createStorage();
-    await storage.delete(req.params.id);
+    await storage.delete(req.params.id, record.path);
     await db.delete(files).where(eq(files.id, req.params.id));
     res.status(204).end();
   } catch (err) { next(err); }
