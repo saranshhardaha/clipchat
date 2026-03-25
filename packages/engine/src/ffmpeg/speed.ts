@@ -1,5 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg';
-import { tempOutputPath, runFfmpeg } from './executor.js';
+import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup } from './executor.js';
 import type { ChangeSpeedInput } from '../types/tools.js';
 
 export async function changeSpeed(input: ChangeSpeedInput, onProgress?: (p: number) => void): Promise<string> {
@@ -19,6 +19,6 @@ export async function changeSpeed(input: ChangeSpeedInput, onProgress?: (p: numb
     .videoFilter(vFilter)
     .audioFilter(aFilter)
     .output(output);
-  await runFfmpeg(cmd, { onProgress });
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
 }

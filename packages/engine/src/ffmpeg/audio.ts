@@ -1,5 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg';
-import { tempOutputPath, runFfmpeg } from './executor.js';
+import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup } from './executor.js';
 import type { ExtractAudioInput, ReplaceAudioInput } from '../types/tools.js';
 
 const AUDIO_QUALITY = { low: '128k', medium: '192k', high: '320k' };
@@ -11,7 +11,7 @@ export async function extractAudio(input: ExtractAudioInput, onProgress?: (p: nu
     .audioCodec(input.format === 'wav' ? 'pcm_s16le' : input.format === 'aac' ? 'aac' : 'libmp3lame')
     .audioBitrate(AUDIO_QUALITY[input.quality ?? 'medium'])
     .output(output);
-  await runFfmpeg(cmd, { onProgress });
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
 }
 
@@ -28,6 +28,6 @@ export async function replaceAudio(input: ReplaceAudioInput, onProgress?: (p: nu
     cmd = cmd.outputOptions(['-map 0:v', '-map 1:a', '-c:v copy', '-shortest']);
   }
   cmd = cmd.output(output);
-  await runFfmpeg(cmd, { onProgress });
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
 }

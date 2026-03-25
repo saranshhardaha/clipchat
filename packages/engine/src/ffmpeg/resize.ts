@@ -1,5 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg';
-import { tempOutputPath, runFfmpeg } from './executor.js';
+import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup } from './executor.js';
 import type { ResizeVideoInput } from '../types/tools.js';
 
 const PRESETS: Record<string, [number, number]> = {
@@ -17,6 +17,6 @@ export async function resizeVideo(input: ResizeVideoInput, onProgress?: (p: numb
     : `scale=${scaleW}:${scaleH}`;
   const output = tempOutputPath('mp4');
   const cmd = ffmpeg(input.input_file).videoFilter(filter).output(output);
-  await runFfmpeg(cmd, { onProgress });
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
 }

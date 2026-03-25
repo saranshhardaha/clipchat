@@ -1,5 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg';
-import { tempOutputPath, runFfmpeg, ffprobePromise } from './executor.js';
+import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup, ffprobePromise } from './executor.js';
 import type { ExportVideoInput } from '../types/tools.js';
 
 const CODEC_MAP = { h264: 'libx264', h265: 'libx265', vp9: 'libvpx-vp9', av1: 'libaom-av1' };
@@ -21,6 +21,6 @@ export async function exportVideo(input: ExportVideoInput, onProgress?: (p: numb
     cmd = cmd.size(`${w}x${h}`);
   }
   cmd = cmd.format(input.format).output(output);
-  await runFfmpeg(cmd, { onProgress });
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
 }

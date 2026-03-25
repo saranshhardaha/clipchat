@@ -1,4 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg';
+import fs from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { v4 as uuid } from 'uuid';
@@ -22,6 +23,19 @@ export function runFfmpeg(
     command.on('end', resolve).on('error', (err) => reject(new Error(err.message)));
     command.run();
   });
+}
+
+export async function runFfmpegWithCleanup(
+  command: ffmpeg.FfmpegCommand,
+  outputPath: string,
+  opts: ExecutorOptions = {},
+): Promise<void> {
+  try {
+    await runFfmpeg(command, opts);
+  } catch (err) {
+    await fs.promises.unlink(outputPath).catch(() => {});
+    throw err;
+  }
 }
 
 export function ffprobePromise(filePath: string): Promise<ffmpeg.FfprobeData> {

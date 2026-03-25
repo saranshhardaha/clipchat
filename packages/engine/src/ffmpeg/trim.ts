@@ -1,5 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg';
-import { tempOutputPath, runFfmpeg } from './executor.js';
+import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup } from './executor.js';
 import type { TrimVideoInput } from '../types/tools.js';
 
 export async function trimVideo(input: TrimVideoInput, onProgress?: (p: number) => void): Promise<string> {
@@ -10,6 +10,6 @@ export async function trimVideo(input: TrimVideoInput, onProgress?: (p: number) 
     .setDuration(String(Number(input.end_time) - Number(input.start_time)))
     .outputOptions(['-c copy'])
     .output(output);
-  await runFfmpeg(cmd, { onProgress });
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
 }

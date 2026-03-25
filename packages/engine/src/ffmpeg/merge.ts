@@ -3,7 +3,7 @@ import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { v4 as uuid } from 'uuid';
-import { tempOutputPath, runFfmpeg } from './executor.js';
+import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup } from './executor.js';
 import type { MergeClipsInput } from '../types/tools.js';
 
 export async function mergeClips(input: MergeClipsInput, onProgress?: (p: number) => void): Promise<string> {
@@ -19,7 +19,7 @@ export async function mergeClips(input: MergeClipsInput, onProgress?: (p: number
       .inputOptions(['-f concat', '-safe 0'])
       .outputOptions(['-c copy'])
       .output(output);
-    await runFfmpeg(cmd, { onProgress });
+    await runFfmpegWithCleanup(cmd, output, { onProgress });
     unlinkSync(listPath);
     return output;
   }
@@ -36,6 +36,6 @@ export async function mergeClips(input: MergeClipsInput, onProgress?: (p: number
     prev = `[v${i}]`;
   }
   cmd.complexFilter(filters).outputOptions(['-map [vout]', '-c:v libx264']).output(output);
-  await runFfmpeg(cmd, { onProgress });
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
 }
