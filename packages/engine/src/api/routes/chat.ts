@@ -40,7 +40,7 @@ router.post('/chat', async (req, res, next) => {
       session = await createSession(apiKeyId, message);
     }
 
-    // Build system prompt, optionally injecting file name (not full path, for security)
+    // Build system prompt, injecting the file path for tool calls
     let systemPrompt = DEFAULT_SYSTEM;
     if (file_id) {
       const [fileRecord] = await db.select().from(files).where(eq(files.id, file_id));
@@ -111,6 +111,8 @@ router.post('/chat', async (req, res, next) => {
     // --- Process accumulated tool calls: submit jobs ---
     const completedToolCalls: ChatCompletionMessageToolCall[] = [];
     const toolCallJobs: Array<{ toolCallId: string; jobId: string }> = [];
+    // Collect for later persistence (after assistant message)
+    const toolMessagesToSave: Array<{ toolCallId: string; content: string }> = [];
 
     for (const [, tc] of [...toolCallMap.entries()].sort(([a], [b]) => a - b)) {
       let input: Record<string, unknown> = {};
@@ -128,9 +130,7 @@ router.post('/chat', async (req, res, next) => {
 
       sendEvent('tool_call', { tool: tc.name, job_id: jobId, input });
 
-      // Store initial tool message (will be updated after polling)
-      await saveToolMessage(session.id, tc.id, JSON.stringify({ job_id: jobId }));
-
+      toolMessagesToSave.push({ toolCallId: tc.id, content: JSON.stringify({ job_id: jobId }) });
       toolCallJobs.push({ toolCallId: tc.id, jobId });
 
       completedToolCalls.push({
@@ -141,11 +141,17 @@ router.post('/chat', async (req, res, next) => {
     }
 
     // Persist first assistant message (with tool calls)
-    const assistantMsg = await saveAssistantMessage(
+    const firstAssistantMsg = await saveAssistantMessage(
       session.id,
       fullText,
       completedToolCalls.length > 0 ? completedToolCalls : null,
     );
+    let doneMsgId = firstAssistantMsg.id;
+
+    // Save tool messages (must follow assistant message in DB)
+    for (const { toolCallId, content } of toolMessagesToSave) {
+      await saveToolMessage(session.id, toolCallId, content);
+    }
 
     // --- Poll jobs until all complete (max 60s) ---
     if (toolCallJobs.length > 0) {
@@ -173,40 +179,44 @@ router.post('/chat', async (req, res, next) => {
       }
 
       // --- Second LLM call: synthesis ---
-      // Rebuild message history (now includes updated tool results)
-      const updatedMessages = await getSessionMessages(session.id);
-      const synthesisHistory = buildMessageHistory(updatedMessages);
+      // Only synthesize if at least one job completed (skip if all timed out)
+      if (jobResults.size > 0) {
+        // Rebuild message history (now includes updated tool results)
+        const updatedMessages = await getSessionMessages(session.id);
+        const synthesisHistory = buildMessageHistory(updatedMessages);
 
-      const abort2 = new AbortController();
-      const abort2Timer = setTimeout(() => abort2.abort(), 45_000);
+        const abort2 = new AbortController();
+        const abort2Timer = setTimeout(() => abort2.abort(), 45_000);
 
-      let synthesisText = '';
-      try {
-        const synthesisStream = await client.chat.completions.create({
-          model,
-          stream: true,
-          messages: [{ role: 'system', content: systemPrompt }, ...synthesisHistory],
-          // No tools on synthesis call — just generate text response
-        }, { signal: abort2.signal });
+        let synthesisText = '';
+        try {
+          const synthesisStream = await client.chat.completions.create({
+            model,
+            stream: true,
+            messages: [{ role: 'system', content: systemPrompt }, ...synthesisHistory],
+            // No tools on synthesis call — just generate text response
+          }, { signal: abort2.signal });
 
-        for await (const chunk of synthesisStream) {
-          const delta = chunk.choices[0]?.delta?.content ?? '';
-          if (delta) {
-            synthesisText += delta;
-            sendEvent('text', { delta });
+          for await (const chunk of synthesisStream) {
+            const delta = chunk.choices[0]?.delta?.content ?? '';
+            if (delta) {
+              synthesisText += delta;
+              sendEvent('text', { delta });
+            }
           }
+        } finally {
+          clearTimeout(abort2Timer);
         }
-      } finally {
-        clearTimeout(abort2Timer);
-      }
 
-      // Persist synthesis message
-      if (synthesisText) {
-        await saveAssistantMessage(session.id, synthesisText, null);
+        // Persist synthesis message
+        if (synthesisText) {
+          const synthMsg = await saveAssistantMessage(session.id, synthesisText, null);
+          doneMsgId = synthMsg.id;
+        }
       }
     }
 
-    sendEvent('done', { session_id: session.id, message_id: assistantMsg.id });
+    sendEvent('done', { session_id: session.id, message_id: doneMsgId });
     res.end();
 
   } catch (err) {
