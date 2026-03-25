@@ -9,7 +9,14 @@ export const TrimVideoInputSchema = z.object({
 
 export const MergeClipsInputSchema = z.object({
   input_files: z.array(z.string()).min(2),
-  transition: z.enum(['none', 'fade', 'crossfade']).default('none'),
+  transition: z.enum([
+    'none', 'fade', 'crossfade',
+    'slideleft', 'slideright', 'slideup', 'slidedown',
+    'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+    'dissolve', 'pixelize', 'zoomin',
+    'fadeblack', 'fadewhite',
+    'circleopen', 'circleclose',
+  ]).default('none'),
   transition_duration: z.number().positive().default(0.5),
 });
 
@@ -90,6 +97,30 @@ export const GetVideoInfoOutputSchema = z.object({
   bitrate: z.number(),
 });
 
+export const CropVideoInputSchema = z.object({
+  input_file: z.string(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  x: z.number().int().min(0).default(0),
+  y: z.number().int().min(0).default(0),
+  preset: z.enum(['square_center', 'portrait_center', 'landscape_center']).optional(),
+});
+
+export const RotateFlipInputSchema = z.object({
+  input_file: z.string(),
+  rotation: z.union([z.literal(90), z.literal(180), z.literal(270)]).optional(),
+  flip: z.enum(['horizontal', 'vertical', 'both']).optional(),
+});
+
+export const ColorAdjustInputSchema = z.object({
+  input_file: z.string(),
+  brightness: z.number().min(-1).max(1).optional(),
+  contrast: z.number().min(0).max(2).optional(),
+  saturation: z.number().min(0).max(3).optional(),
+  gamma: z.number().min(0.1).max(10).optional(),
+  hue: z.number().min(-180).max(180).optional(),
+});
+
 export type TrimVideoInput = z.infer<typeof TrimVideoInputSchema>;
 export type MergeClipsInput = z.infer<typeof MergeClipsInputSchema>;
 export type AddSubtitlesInput = z.infer<typeof AddSubtitlesInputSchema>;
@@ -101,3 +132,6 @@ export type ChangeSpeedInput = z.infer<typeof ChangeSpeedInputSchema>;
 export type ExportVideoInput = z.infer<typeof ExportVideoInputSchema>;
 export type GetVideoInfoInput = z.infer<typeof GetVideoInfoInputSchema>;
 export type GetVideoInfoOutput = z.infer<typeof GetVideoInfoOutputSchema>;
+export type CropVideoInput = z.infer<typeof CropVideoInputSchema>;
+export type RotateFlipInput = z.infer<typeof RotateFlipInputSchema>;
+export type ColorAdjustInput = z.infer<typeof ColorAdjustInputSchema>;

@@ -3,7 +3,8 @@ export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed';
 export type ToolName =
   | 'trim_video' | 'merge_clips' | 'add_subtitles' | 'add_text_overlay'
   | 'resize_video' | 'extract_audio' | 'replace_audio' | 'change_speed'
-  | 'export_video' | 'get_video_info';
+  | 'export_video' | 'get_video_info'
+  | 'crop_video' | 'rotate_flip' | 'color_adjust';
 
 export interface Job {
   id: string;

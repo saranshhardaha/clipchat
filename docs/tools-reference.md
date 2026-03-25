@@ -1,6 +1,6 @@
 # Tools Reference
 
-ClipChat exposes 10 FFmpeg operations as tools. Each tool accepts a JSON input object and returns either structured data or the path to an output file.
+ClipChat exposes 13 FFmpeg operations as tools. Each tool accepts a JSON input object and returns either structured data or the path to an output file.
 
 **Usage:** Submit via `POST /api/v1/jobs` with `{ "tool": "<name>", "input": { ... } }`, or via `POST /api/v1/tools/<name>` with just the input object.
 
@@ -109,10 +109,20 @@ Concatenate multiple video clips. With `transition: "none"` uses stream copy (fa
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `input_files` | string[] | Yes | — | At least 2 video paths to concatenate in order |
-| `transition` | string | No | `"none"` | `"none"`, `"fade"`, or `"crossfade"` |
+| `transition` | string | No | `"none"` | Transition type (see below) |
 | `transition_duration` | number | No | `0.5` | Duration of transition in seconds (ignored for `"none"`) |
 
 **Output (job.output):** Path to merged file (string).
+
+**Transition options:**
+
+| Category | Values |
+|----------|--------|
+| None | `none` |
+| Fades | `fade`, `crossfade`, `fadeblack`, `fadewhite` |
+| Slides | `slideleft`, `slideright`, `slideup`, `slidedown` |
+| Wipes | `wipeleft`, `wiperight`, `wipeup`, `wipedown` |
+| Special | `dissolve`, `pixelize`, `zoomin`, `circleopen`, `circleclose` |
 
 **Example — fast concat:**
 ```json
@@ -122,16 +132,16 @@ Concatenate multiple video clips. With `transition: "none"` uses stream copy (fa
 }
 ```
 
-**Example — with crossfade:**
+**Example — slide transition:**
 ```json
 {
   "input_files": ["/uploads/a.mp4", "/uploads/b.mp4"],
-  "transition": "crossfade",
-  "transition_duration": 1.0
+  "transition": "slideleft",
+  "transition_duration": 0.8
 }
 ```
 
-**Note:** When using transitions, all clips should have the same resolution and frame rate.
+**Note:** Any transition other than `"none"` requires re-encoding. All clips should have the same resolution and frame rate.
 
 ---
 
@@ -465,5 +475,156 @@ Re-encode a video with a specific codec, quality level, or target file size.
   "format": "webm",
   "codec": "vp9",
   "quality": "medium"
+}
+```
+
+---
+
+## 11. `crop_video`
+
+Crop a video to a specific region or use a smart preset that centers the crop automatically.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "preset": "square_center"
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `preset` | string | No | — | Smart crop preset (see below) — takes priority over width/height |
+| `width` | integer | No | — | Crop width in pixels (required if no preset) |
+| `height` | integer | No | — | Crop height in pixels (required if no preset) |
+| `x` | integer | No | `0` | Crop origin X (ignored when preset is set) |
+| `y` | integer | No | `0` | Crop origin Y (ignored when preset is set) |
+
+**Presets:**
+
+| Preset | Description |
+|--------|-------------|
+| `square_center` | Crops the largest centered square (min of width and height) |
+| `portrait_center` | Crops a 9:16 portrait region centered horizontally |
+| `landscape_center` | Crops a 16:9 landscape region centered vertically |
+
+**Output (job.output):** Path to cropped file (string). Audio is copied unchanged.
+
+**Example — square crop for Instagram:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "preset": "square_center"
+}
+```
+
+**Example — manual crop region:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "width": 640,
+  "height": 360,
+  "x": 320,
+  "y": 180
+}
+```
+
+---
+
+## 12. `rotate_flip`
+
+Rotate a video by 90/180/270 degrees and/or flip it horizontally or vertically.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "rotation": 90,
+  "flip": "horizontal"
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `rotation` | number | No | — | Degrees clockwise: `90`, `180`, or `270` |
+| `flip` | string | No | — | `"horizontal"`, `"vertical"`, or `"both"` |
+
+At least one of `rotation` or `flip` should be set. Both can be combined (rotation is applied first).
+
+**Output (job.output):** Path to transformed file (string). Audio is copied unchanged.
+
+**Example — rotate a portrait video to landscape:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "rotation": 90
+}
+```
+
+**Example — mirror horizontally:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "flip": "horizontal"
+}
+```
+
+---
+
+## 13. `color_adjust`
+
+Adjust the color and tone of a video using FFmpeg's `eq` and `hue` filters.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "brightness": 0.1,
+  "contrast": 1.2,
+  "saturation": 1.5,
+  "gamma": 1.0,
+  "hue": 0
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `brightness` | number | No | — | Brightness offset: `-1.0` (black) to `1.0` (white), `0` = no change |
+| `contrast` | number | No | — | Contrast multiplier: `0` to `2.0`, `1.0` = no change |
+| `saturation` | number | No | — | Saturation multiplier: `0` (grayscale) to `3.0`, `1.0` = no change |
+| `gamma` | number | No | — | Gamma curve: `0.1` to `10.0`, `1.0` = no change |
+| `hue` | number | No | — | Hue rotation in degrees: `-180` to `180`, `0` = no change |
+
+At least one field should be set. Only specified fields are applied.
+
+**Output (job.output):** Path to color-adjusted file (string). Audio is copied unchanged.
+
+**Example — brighten and boost saturation:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "brightness": 0.1,
+  "saturation": 1.4
+}
+```
+
+**Example — desaturate (grayscale):**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "saturation": 0
+}
+```
+
+**Example — warm tone shift:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "hue": 15,
+  "saturation": 1.2,
+  "contrast": 1.1
 }
 ```

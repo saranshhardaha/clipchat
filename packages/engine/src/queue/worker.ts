@@ -10,6 +10,7 @@ import { extractAudio, replaceAudio } from '../ffmpeg/audio.js';
 import { addTextOverlay, addSubtitles } from '../ffmpeg/text.js';
 import { changeSpeed } from '../ffmpeg/speed.js';
 import { exportVideo } from '../ffmpeg/export.js';
+import { cropVideo, rotateFlip, colorAdjust } from '../ffmpeg/adjust.js';
 import type { ToolName } from '../types/job.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -18,6 +19,9 @@ const TOOL_MAP: Record<ToolName, (input: any, onProgress: (p: number) => void) =
   trim_video: (i, p) => trimVideo(i, p),
   merge_clips: (i, p) => mergeClips(i, p),
   resize_video: (i, p) => resizeVideo(i, p),
+  crop_video: (i, p) => cropVideo(i, p),
+  rotate_flip: (i, p) => rotateFlip(i, p),
+  color_adjust: (i, p) => colorAdjust(i, p),
   extract_audio: (i, p) => extractAudio(i, p),
   replace_audio: (i, p) => replaceAudio(i, p),
   add_text_overlay: (i, p) => addTextOverlay(i, p),

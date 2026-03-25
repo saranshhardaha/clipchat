@@ -1,6 +1,6 @@
 # MCP Integration
 
-ClipChat exposes all 10 FFmpeg tools via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), letting AI agents like Claude call video operations directly.
+ClipChat exposes all 13 FFmpeg tools via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), letting AI agents like Claude call video operations directly.
 
 ---
 
@@ -11,7 +11,7 @@ When started with `--mcp`, ClipChat runs as an MCP server over stdio. The AI age
 **Key difference from the REST API:**
 - MCP tools call FFmpeg **directly** — no job queue, no polling
 - Results are returned **immediately** in the tool response
-- All 10 tools are available with the same input schemas as the REST API
+- All 13 tools are available with the same input schemas as the REST API
 
 ---
 

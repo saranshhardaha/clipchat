@@ -27,7 +27,9 @@ export async function mergeClips(input: MergeClipsInput, onProgress?: (p: number
     return output;
   }
 
-  // xfade filter for crossfade (requires re-encode)
+  // xfade filter for transitions (requires re-encode)
+  // 'crossfade' is an alias for 'fade' in FFmpeg xfade
+  const xfadeName = input.transition === 'crossfade' ? 'fade' : input.transition;
   const dur = input.transition_duration ?? 0.5;
   let cmd = ffmpeg();
   input.input_files.forEach(f => cmd = cmd.input(f));
@@ -35,7 +37,7 @@ export async function mergeClips(input: MergeClipsInput, onProgress?: (p: number
   let prev = '[0:v]';
   for (let i = 1; i < input.input_files.length; i++) {
     const out = i === input.input_files.length - 1 ? '[vout]' : `[v${i}]`;
-    filters.push(`${prev}[${i}:v]xfade=transition=fade:duration=${dur}:offset=${(i * 10) - dur}${out}`);
+    filters.push(`${prev}[${i}:v]xfade=transition=${xfadeName}:duration=${dur}:offset=${(i * 10) - dur}${out}`);
     prev = `[v${i}]`;
   }
   cmd.complexFilter(filters).outputOptions(['-map [vout]', '-c:v libx264']).output(output);
