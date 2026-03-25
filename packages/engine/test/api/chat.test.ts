@@ -4,6 +4,15 @@ import { createHash, randomBytes } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
+// Mock the queue so submitJob returns a known job ID and we can pre-complete it in tests.
+vi.mock('../../src/queue/index.js', () => {
+  let _nextJobId = 'job_test_mock_001';
+  return {
+    submitJob: vi.fn().mockImplementation(async () => _nextJobId),
+    _setNextJobId: (id: string) => { _nextJobId = id; },
+  };
+});
+
 // Mock the ai/tools module so we never hit real OpenRouter.
 // Must be called before any imports that transitively load the module.
 vi.mock('../../src/ai/tools.js', async (importOriginal) => {
@@ -149,52 +158,82 @@ describe('Chat API', () => {
   });
 
   it('POST /chat emits tool_call event when model returns a tool call', async () => {
-    // Override mock for this test to simulate a tool_use response
+    // Use a known job ID via the queue mock. The route will insert it as 'queued';
+    // a background timer updates it to 'completed' so the poll loop exits quickly.
+    const knownJobId = `job_test_trim_${Date.now().toString(36)}`;
+    const queueModule = await import('../../src/queue/index.js');
+    (queueModule as unknown as { _setNextJobId: (id: string) => void })._setNextJobId(knownJobId);
+
+    // After the route inserts the job as 'queued' (~immediate), mark it completed
+    // so the poll loop (which waits 1s before first check) sees it as done.
+    const completeTimer = setTimeout(async () => {
+      await db.update(jobs)
+        .set({ status: 'completed', output: { output_file: '/tmp/test_trimmed.mp4' }, progress: 100 })
+        .where(eq(jobs.id, knownJobId));
+    }, 500);
+
+    // First LLM call: streams text + a tool call
+    const firstCallStream = (async function* () {
+      yield { choices: [{ delta: { content: "I'll trim your video now." }, finish_reason: null }] };
+      yield {
+        choices: [{
+          delta: {
+            tool_calls: [{
+              index: 0,
+              id: 'call_abc123',
+              function: {
+                name: 'trim_video',
+                arguments: '{"input_file":"/tmp/test.mp4","start_time":"0","end_time":"5"}',
+              },
+            }],
+          },
+          finish_reason: null,
+        }],
+      };
+      yield { choices: [{ delta: {}, finish_reason: 'tool_calls' }] };
+    })();
+
+    // Second LLM call (synthesis): returns a summary
+    const secondCallStream = (async function* () {
+      yield { choices: [{ delta: { content: 'I have trimmed your video to 5 seconds.' }, finish_reason: null }] };
+      yield { choices: [{ delta: {}, finish_reason: 'stop' }] };
+    })();
+
     const { createOpenRouterClient } = await import('../../src/ai/tools.js');
     (createOpenRouterClient as ReturnType<typeof vi.fn>).mockReturnValueOnce({
       chat: {
         completions: {
-          create: vi.fn().mockReturnValue(
-            (async function* () {
-              yield { choices: [{ delta: { content: "I'll trim your video now." }, finish_reason: null }] };
-              yield {
-                choices: [{
-                  delta: {
-                    tool_calls: [{
-                      index: 0,
-                      id: 'call_abc123',
-                      function: {
-                        name: 'trim_video',
-                        arguments: '{"input_file":"/tmp/test.mp4","start_time":"0","end_time":"5"}',
-                      },
-                    }],
-                  },
-                  finish_reason: null,
-                }],
-              };
-              yield { choices: [{ delta: {}, finish_reason: 'tool_calls' }] };
-            })()
-          ),
+          create: vi.fn()
+            .mockReturnValueOnce(firstCallStream)
+            .mockReturnValueOnce(secondCallStream),
         },
       },
     });
 
-    const { status, events } = await sseRequest(app, apiKey, { message: 'Trim to 0-5 seconds' });
+    try {
+      const { status, events } = await sseRequest(app, apiKey, { message: 'Trim to 0-5 seconds' });
 
-    expect(status).toBe(200);
-    const toolEvents = events.filter(e => e.event === 'tool_call');
-    expect(toolEvents.length).toBe(1);
+      expect(status).toBe(200);
+      const toolEvents = events.filter(e => e.event === 'tool_call');
+      expect(toolEvents.length).toBe(1);
 
-    const tc = toolEvents[0].data as { tool: string; job_id: string; input: Record<string, unknown> };
-    expect(tc.tool).toBe('trim_video');
-    expect(tc.job_id).toMatch(/^job_/);
+      const tc = toolEvents[0].data as { tool: string; job_id: string; input: Record<string, unknown> };
+      expect(tc.tool).toBe('trim_video');
+      expect(tc.job_id).toBe(knownJobId);
 
-    // Verify job was inserted in DB
-    const [job] = await db.select().from(jobs).where(eq(jobs.id, tc.job_id));
-    expect(job).toBeDefined();
-    expect(job.tool).toBe('trim_video');
-    expect(job.status).toBe('queued');
-  });
+      // Verify job exists in DB
+      const [job] = await db.select().from(jobs).where(eq(jobs.id, tc.job_id));
+      expect(job).toBeDefined();
+      expect(job.tool).toBe('trim_video');
+
+      // Verify synthesis text was streamed
+      const textEvents = events.filter(e => e.event === 'text');
+      expect(textEvents.length).toBeGreaterThan(0);
+    } finally {
+      clearTimeout(completeTimer);
+      await db.delete(jobs).where(eq(jobs.id, knownJobId));
+    }
+  }, 15_000);
 
   it('POST /chat with valid file_id injects file path via DB lookup', async () => {
     // Create a temporary file on disk to simulate an uploaded file
