@@ -7,12 +7,16 @@ const router = Router();
 
 router.get('/sessions', async (req, res, next) => {
   try {
+    const limit = Math.min(Number(req.query.limit ?? 50), 200);
+    const offset = Number(req.query.offset ?? 0);
     const rows = await db
       .select()
       .from(sessions)
       .where(eq(sessions.api_key_id, req.apiKeyId!))
-      .orderBy(desc(sessions.updated_at));
-    res.json({ sessions: rows });
+      .orderBy(desc(sessions.updated_at))
+      .limit(limit)
+      .offset(offset);
+    res.json({ sessions: rows, limit, offset });
   } catch (err) { next(err); }
 });
 

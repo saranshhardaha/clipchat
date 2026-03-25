@@ -25,6 +25,26 @@ describe('Files API', () => {
     await db.delete(apiKeys).where(eq(apiKeys.id, apiKeyId));
   });
 
+  it('GET /files returns paginated file list', async () => {
+    const res = await request(app)
+      .get('/api/v1/files')
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('files');
+    expect(Array.isArray(res.body.files)).toBe(true);
+    expect(res.body).toHaveProperty('limit', 50);
+    expect(res.body).toHaveProperty('offset', 0);
+  });
+
+  it('GET /files respects limit and offset query params', async () => {
+    const res = await request(app)
+      .get('/api/v1/files?limit=10&offset=5')
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('limit', 10);
+    expect(res.body).toHaveProperty('offset', 5);
+  });
+
   it('POST /files/upload returns 401 without Authorization header', async () => {
     const res = await request(app)
       .post('/api/v1/files/upload')

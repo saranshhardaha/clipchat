@@ -1,4 +1,4 @@
-import { Queue } from 'bullmq';
+import { Queue, QueueEvents } from 'bullmq';
 import type { ToolName } from '../types/job.js';
 
 const QUEUE_NAME = 'clipchat-jobs';
@@ -20,6 +20,16 @@ export function getQueue(): Queue {
     },
   });
   return _queue;
+}
+
+let _queueEvents: QueueEvents | null = null;
+
+export function getQueueEvents(): QueueEvents {
+  if (_queueEvents) return _queueEvents;
+  const url = process.env.REDIS_URL ?? 'redis://localhost:6379';
+  const connection = { host: new URL(url).hostname, port: Number(new URL(url).port || 6379) };
+  _queueEvents = new QueueEvents(QUEUE_NAME, { connection });
+  return _queueEvents;
 }
 
 export async function submitJob(tool: ToolName, input: Record<string, unknown>): Promise<string> {

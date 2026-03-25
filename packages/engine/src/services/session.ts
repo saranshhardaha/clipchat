@@ -1,4 +1,4 @@
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, desc } from 'drizzle-orm';
 import type { ChatCompletionMessageParam, ChatCompletionMessageToolCall } from 'openai/resources/chat/completions.js';
 import { db } from '../db/index.js';
 import { sessions, chatMessages } from '../db/schema.js';
@@ -31,8 +31,9 @@ export async function getSessionMessages(sessionId: string): Promise<ChatMessage
     .select()
     .from(chatMessages)
     .where(eq(chatMessages.session_id, sessionId))
-    .orderBy(asc(chatMessages.created_at));
-  return rows as ChatMessage[];
+    .orderBy(desc(chatMessages.created_at))
+    .limit(100);
+  return (rows as ChatMessage[]).reverse();
 }
 
 export async function saveUserMessage(sessionId: string, content: string): Promise<ChatMessage> {

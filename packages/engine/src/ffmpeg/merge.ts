@@ -14,13 +14,16 @@ export async function mergeClips(input: MergeClipsInput, onProgress?: (p: number
     const listPath = join(tmpdir(), `concat_${uuid()}.txt`);
     const content = input.input_files.map(f => `file '${f}'`).join('\n');
     writeFileSync(listPath, content);
-    const cmd = ffmpeg()
-      .input(listPath)
-      .inputOptions(['-f concat', '-safe 0'])
-      .outputOptions(['-c copy'])
-      .output(output);
-    await runFfmpegWithCleanup(cmd, output, { onProgress });
-    unlinkSync(listPath);
+    try {
+      const cmd = ffmpeg()
+        .input(listPath)
+        .inputOptions(['-f concat', '-safe 0'])
+        .outputOptions(['-c copy'])
+        .output(output);
+      await runFfmpegWithCleanup(cmd, output, { onProgress });
+    } finally {
+      try { unlinkSync(listPath); } catch { /* ignore */ }
+    }
     return output;
   }
 

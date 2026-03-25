@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../../db/index.js';
 import { jobs } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { submitJob, getQueue } from '../../queue/index.js';
+import { submitJob, getQueue, getQueueEvents } from '../../queue/index.js';
 import { AppError } from '../../types/job.js';
 import type { ToolName } from '../../types/job.js';
 import {
@@ -58,21 +58,60 @@ router.get('/jobs/:id', async (req, res, next) => {
 
 router.get('/jobs/:id/stream', async (req, res, next) => {
   try {
-    const [job] = await db.select().from(jobs).where(eq(jobs.id, req.params.id));
+    const jobId = req.params.id;
+    const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
     if (!job) throw new AppError(404, 'Job not found');
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+
     const send = (data: object) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-    const poll = setInterval(async () => {
-      const [current] = await db.select().from(jobs).where(eq(jobs.id, req.params.id));
-      if (!current) { clearInterval(poll); res.end(); return; }
-      send(current);
-      if (current.status === 'completed' || current.status === 'failed') {
-        clearInterval(poll); res.end();
-      }
-    }, 500);
-    req.on('close', () => clearInterval(poll));
+
+    // If already finished, send final state and close immediately
+    if (job.status === 'completed' || job.status === 'failed') {
+      send(job);
+      res.end();
+      return;
+    }
+
+    const queueEvents = getQueueEvents();
+
+    const onProgress = ({ jobId: id, data }: { jobId: string; data: number }) => {
+      if (id !== jobId) return;
+      send({ ...job, status: 'processing', progress: data });
+    };
+
+    const onCompleted = async ({ jobId: id }: { jobId: string }) => {
+      if (id !== jobId) return;
+      const [current] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+      if (current) send(current);
+      cleanup();
+    };
+
+    const onFailed = async ({ jobId: id }: { jobId: string }) => {
+      if (id !== jobId) return;
+      const [current] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+      if (current) send(current);
+      cleanup();
+    };
+
+    function cleanup() {
+      queueEvents.off('progress', onProgress);
+      queueEvents.off('completed', onCompleted);
+      queueEvents.off('failed', onFailed);
+      if (!res.writableEnded) res.end();
+    }
+
+    queueEvents.on('progress', onProgress);
+    queueEvents.on('completed', onCompleted);
+    queueEvents.on('failed', onFailed);
+
+    req.on('close', cleanup);
+
+    // Send initial state so client has current progress
+    send(job);
+
   } catch (err) { next(err); }
 });
 

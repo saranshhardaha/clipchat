@@ -38,6 +38,15 @@ describe('Sessions API', () => {
     expect(res.body.sessions).toHaveLength(0);
   });
 
+  it('GET /sessions returns pagination fields limit and offset', async () => {
+    const res = await request(app)
+      .get('/api/v1/sessions?limit=2&offset=0')
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('limit', 2);
+    expect(res.body).toHaveProperty('offset', 0);
+  });
+
   it('GET /sessions/:id/messages returns 404 for unknown session id', async () => {
     const res = await request(app)
       .get('/api/v1/sessions/ses_doesnotexist/messages')

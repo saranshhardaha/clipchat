@@ -7,7 +7,7 @@ import { createStorage } from '../../storage/index.js';
 import { AppError } from '../../types/job.js';
 import { db } from '../../db/index.js';
 import { files } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 const router = Router();
 const upload = multer({
@@ -43,6 +43,18 @@ router.post('/files/upload', upload.single('file'), async (req, res, next) => {
   } finally {
     await unlink(tmpPath).catch(() => {});
   }
+});
+
+router.get('/files', async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit ?? 50), 200);
+    const offset = Number(req.query.offset ?? 0);
+    const rows = await db.select().from(files)
+      .orderBy(desc(files.created_at))
+      .limit(limit)
+      .offset(offset);
+    res.json({ files: rows, limit, offset });
+  } catch (err) { next(err); }
 });
 
 router.get('/files/:id', async (req, res, next) => {
