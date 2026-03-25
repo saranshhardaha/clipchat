@@ -20,9 +20,9 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    setUploadError(null);
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
 
     setIsUploading(true);
     try {
@@ -76,7 +76,7 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
       )}
 
       {uploadError && (
-        <p className="text-xs text-destructive px-1">{uploadError}</p>
+        <p role="alert" className="text-xs text-destructive px-1">{uploadError}</p>
       )}
 
       <div className="flex items-end gap-2">

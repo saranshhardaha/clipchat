@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { getSessions, type Session } from '@/lib/engine-client';
 
 export function useSessionsList() {
@@ -14,5 +15,5 @@ export function useSessionsList() {
 
 export function useInvalidateSessions() {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: ['sessions'] });
+  return useCallback(() => qc.invalidateQueries({ queryKey: ['sessions'] }), [qc]);
 }

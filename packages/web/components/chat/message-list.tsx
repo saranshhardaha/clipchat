@@ -15,10 +15,10 @@ export function MessageList({ messages, onLoadInPlayer }: MessageListProps) {
   useEffect(() => {
     const el = scrollAreaRef.current;
     if (!el) return;
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-    if (isAtBottom) {
-      el.scrollTop = el.scrollHeight;
-    }
+    requestAnimationFrame(() => {
+      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+      if (isAtBottom) el.scrollTop = el.scrollHeight;
+    });
   }, [messages]);
 
   if (messages.length === 0) {

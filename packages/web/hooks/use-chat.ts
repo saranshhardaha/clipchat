@@ -222,7 +222,6 @@ export function useChat(initialSessionId?: string): UseChatReturn {
                     i === prev.length - 1 ? { ...m, id: realMsgId } : m
                   )
                 );
-                invalidateSessions();
                 if (!sessionId) {
                   router.push(`/chat/${newSessionId}`);
                 }
@@ -248,6 +247,7 @@ export function useChat(initialSessionId?: string): UseChatReturn {
         }
       } finally {
         setIsStreaming(false);
+        invalidateSessions();
       }
     },
     [sessionId, isStreaming, router, invalidateSessions]
