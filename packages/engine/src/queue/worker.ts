@@ -35,9 +35,14 @@ export function createWorker() {
 
     await db.update(jobs).set({ status: 'processing', progress: 0 }).where(eq(jobs.id, job.id!));
 
+    let lastDbProgress = 0;
     const onProgress = async (percent: number) => {
-      await job.updateProgress(percent);
-      await db.update(jobs).set({ progress: Math.floor(percent) }).where(eq(jobs.id, job.id!));
+      await job.updateProgress(percent);          // BullMQ in-memory (no throttle needed)
+      const now = Date.now();
+      if (now - lastDbProgress >= 1000) {         // DB write at most once per second
+        await db.update(jobs).set({ progress: Math.floor(percent) }).where(eq(jobs.id, job.id!));
+        lastDbProgress = now;
+      }
     };
 
     const handler = TOOL_MAP[tool];
