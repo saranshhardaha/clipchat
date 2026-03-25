@@ -16,9 +16,11 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
   const [pendingFileId, setPendingFileId] = useState<string | null>(null);
   const [pendingFileName, setPendingFileName] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    setUploadError(null);
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -31,6 +33,7 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
       setPendingFileName(file.name);
     } catch (err) {
       console.error('Upload failed:', err);
+      setUploadError('Upload failed — please try again');
     } finally {
       setIsUploading(false);
       // Reset input so same file can be re-selected
@@ -72,6 +75,10 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
         </div>
       )}
 
+      {uploadError && (
+        <p className="text-xs text-destructive px-1">{uploadError}</p>
+      )}
+
       <div className="flex items-end gap-2">
         {/* Hidden file input */}
         <input
@@ -101,7 +108,7 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
         {/* Text input */}
         <Textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); if (uploadError) setUploadError(null); }}
           onKeyDown={handleKeyDown}
           placeholder="Ask Claude to edit your video… (Cmd+Enter to send)"
           className="min-h-[40px] max-h-[120px] resize-none flex-1 py-2"

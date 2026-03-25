@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSessionMessages, type ChatMessage } from '@/lib/engine-client';
+import { useInvalidateSessions } from './use-sessions-list';
 
 export interface ToolCallCard {
   id: string;
@@ -16,6 +17,7 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   toolCalls: ToolCallCard[];
+  hasError?: boolean;
 }
 
 interface UseChatReturn {
@@ -102,6 +104,7 @@ export function useChat(initialSessionId?: string): UseChatReturn {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const loadedRef = useRef(false);
+  const invalidateSessions = useInvalidateSessions();
 
   // Load existing session messages on mount
   useEffect(() => {
@@ -219,16 +222,14 @@ export function useChat(initialSessionId?: string): UseChatReturn {
                     i === prev.length - 1 ? { ...m, id: realMsgId } : m
                   )
                 );
+                invalidateSessions();
                 if (!sessionId) {
                   router.push(`/chat/${newSessionId}`);
                 }
               } else if (eventName === 'error') {
-                const errMsg = payload.message as string;
                 setMessages((prev) =>
                   prev.map((m, i) =>
-                    i === prev.length - 1
-                      ? { ...m, content: m.content + `\n\n[Error: ${errMsg}]` }
-                      : m
+                    i === prev.length - 1 ? { ...m, hasError: true } : m
                   )
                 );
               }
@@ -241,9 +242,7 @@ export function useChat(initialSessionId?: string): UseChatReturn {
         if ((err as Error).name !== 'AbortError') {
           setMessages((prev) =>
             prev.map((m, i) =>
-              i === prev.length - 1
-                ? { ...m, content: m.content + '\n\n[Connection error — please try again]' }
-                : m
+              i === prev.length - 1 ? { ...m, hasError: true } : m
             )
           );
         }
@@ -251,7 +250,7 @@ export function useChat(initialSessionId?: string): UseChatReturn {
         setIsStreaming(false);
       }
     },
-    [sessionId, isStreaming, router]
+    [sessionId, isStreaming, router, invalidateSessions]
   );
 
   return { messages, isStreaming, sessionId, sendMessage };

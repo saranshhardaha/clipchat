@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './message-bubble';
 import type { Message } from '@/hooks/use-chat';
 
@@ -11,10 +10,15 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, onLoadInPlayer }: MessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    if (isAtBottom) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages]);
 
   if (messages.length === 0) {
@@ -29,7 +33,7 @@ export function MessageList({ messages, onLoadInPlayer }: MessageListProps) {
   }
 
   return (
-    <ScrollArea className="flex-1">
+    <div ref={scrollAreaRef} className="flex-1 overflow-y-auto">
       <div className="space-y-3 p-4">
         {messages.map((message) => (
           <MessageBubble
@@ -38,8 +42,7 @@ export function MessageList({ messages, onLoadInPlayer }: MessageListProps) {
             onLoadInPlayer={onLoadInPlayer}
           />
         ))}
-        <div ref={bottomRef} />
       </div>
-    </ScrollArea>
+    </div>
   );
 }

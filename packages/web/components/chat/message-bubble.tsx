@@ -27,6 +27,13 @@ export function MessageBubble({ message, onLoadInPlayer }: MessageBubbleProps) {
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
         )}
 
+        {/* Error indicator */}
+        {message.hasError && (
+          <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+            <span aria-hidden>⚠</span> Something went wrong. Please try again.
+          </p>
+        )}
+
         {/* Tool call cards (assistant only) */}
         {message.toolCalls.map((tc) => (
           <ToolCallCard key={tc.id} toolCall={tc} onLoadInPlayer={onLoadInPlayer} />

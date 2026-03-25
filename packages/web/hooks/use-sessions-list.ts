@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getSessions, type Session } from '@/lib/engine-client';
 
 export function useSessionsList() {
@@ -10,4 +10,9 @@ export function useSessionsList() {
     refetchInterval: 10_000,
     staleTime: 5_000,
   });
+}
+
+export function useInvalidateSessions() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: ['sessions'] });
 }

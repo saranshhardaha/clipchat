@@ -24,7 +24,7 @@ function formatRelativeTime(dateStr: string): string {
 export function SidebarItem({ session }: { session: Session }) {
   const pathname = usePathname();
   const isActive = pathname === `/chat/${session.id}`;
-  const title = session.title ?? 'Untitled session';
+  const title = session.title?.trim() || 'Untitled session';
   const truncated = title.length > 28 ? title.slice(0, 28) + '…' : title;
 
   return (
