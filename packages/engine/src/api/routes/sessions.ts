@@ -7,8 +7,8 @@ const router = Router();
 
 router.get('/sessions', async (req, res, next) => {
   try {
-    const limit = Math.min(Number(req.query.limit ?? 50), 200);
-    const offset = Number(req.query.offset ?? 0);
+    const limit = Math.min(Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50), 200);
+    const offset = Math.max(0, parseInt(String(req.query.offset ?? '0'), 10) || 0);
     const rows = await db
       .select()
       .from(sessions)

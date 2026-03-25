@@ -79,7 +79,7 @@ router.get('/jobs/:id/stream', async (req, res, next) => {
 
     const onProgress = ({ jobId: id, data }: { jobId: string; data: number }) => {
       if (id !== jobId) return;
-      send({ ...job, status: 'processing', progress: data });
+      send({ id: jobId, status: 'processing', progress: data });
     };
 
     const onCompleted = async ({ jobId: id }: { jobId: string }) => {
@@ -97,6 +97,7 @@ router.get('/jobs/:id/stream', async (req, res, next) => {
     };
 
     function cleanup() {
+      req.off('close', cleanup);
       queueEvents.off('progress', onProgress);
       queueEvents.off('completed', onCompleted);
       queueEvents.off('failed', onFailed);

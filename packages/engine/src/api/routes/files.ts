@@ -45,10 +45,13 @@ router.post('/files/upload', upload.single('file'), async (req, res, next) => {
   }
 });
 
+// TODO: The files table has no api_key_id column, so this endpoint returns all
+// files regardless of which API key uploaded them. Add api_key_id to files
+// table + a migration to scope this per API key.
 router.get('/files', async (req, res, next) => {
   try {
-    const limit = Math.min(Number(req.query.limit ?? 50), 200);
-    const offset = Number(req.query.offset ?? 0);
+    const limit = Math.min(Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50), 200);
+    const offset = Math.max(0, parseInt(String(req.query.offset ?? '0'), 10) || 0);
     const rows = await db.select().from(files)
       .orderBy(desc(files.created_at))
       .limit(limit)
