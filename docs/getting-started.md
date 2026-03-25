@@ -55,6 +55,12 @@ STORAGE_DRIVER=local
 UPLOAD_DIR=./uploads
 PORT=3000
 WORKER_CONCURRENCY=2
+
+# Required only for AI chat (/api/v1/chat)
+OPENROUTER_API_KEY=
+
+# Required only for the web UI (packages/web)
+ENGINE_API_KEY=   # generate in step 5
 ```
 
 ---
@@ -87,7 +93,7 @@ npm run db:generate -w packages/engine
 npm run db:migrate -w packages/engine
 ```
 
-This creates the `files`, `jobs`, and `api_keys` tables.
+This creates the `files`, `jobs`, `api_keys`, `sessions`, and `chat_messages` tables.
 
 ---
 
@@ -112,13 +118,19 @@ Copy this key — you'll use it as `Authorization: Bearer <key>` in API requests
 ## 6. Start the Dev Server
 
 ```bash
-npm run dev
+npm run dev -w packages/engine
 ```
 
 This starts the Express API server and BullMQ worker with hot reload (via `tsx watch`).
 
 ```
 ClipChat API listening on :3000
+```
+
+To also run the web UI, open a second terminal:
+```bash
+npm run dev:web
+# Web UI available at http://localhost:3001
 ```
 
 ---
@@ -149,18 +161,33 @@ Tests require Postgres and Redis. Start them first:
 docker compose up -d postgres redis
 ```
 
+Export the required environment variables (or add them to your `.env`):
+```bash
+export DATABASE_URL=postgres://postgres:clipchat@localhost:5432/clipchat
+export REDIS_URL=redis://localhost:6379
+```
+
 Run all tests:
 ```bash
-DATABASE_URL=postgres://postgres:clipchat@localhost:5432/clipchat \
-REDIS_URL=redis://localhost:6379 \
 npm test -w packages/engine
 ```
 
 Run a single test file:
 ```bash
-DATABASE_URL=... REDIS_URL=... \
 npm test -w packages/engine -- test/ffmpeg/trim.test.ts
 ```
+
+**What to expect:**
+
+| Suite type | Count | Requires infra? |
+|-----------|-------|-----------------|
+| FFmpeg tool tests (`test/ffmpeg/`) | ~12 files | No — FFmpeg only |
+| Storage unit tests (`test/storage.test.ts`) | 1 file | No |
+| FFmpeg cleanup test (`test/ffmpeg/cleanup.test.ts`) | 1 file | No |
+| API integration tests (`test/api/`) | 3 files | Yes — Postgres + Redis |
+| DB tests (`test/db/`) | 1 file | Yes — Postgres |
+
+Without infra running, ~9 suites fail with `[startup] Missing required env var: DATABASE_URL`. This is expected — start infra and re-run to see all tests pass.
 
 **Test fixtures** (test.mp4, test.mp3, test.srt) are auto-generated on first run using FFmpeg. This takes ~10 seconds once and is then cached. Fixtures are gitignored.
 
@@ -170,17 +197,21 @@ npm test -w packages/engine -- test/ffmpeg/trim.test.ts
 
 ## Full Docker Stack
 
-To run everything in Docker (including the engine):
+To run everything in Docker (engine + web UI + infra):
 
 ```bash
-docker compose build
-docker compose up -d
+# Generate an API key first (the web UI needs it to call the engine)
+npm run create-api-key -w packages/engine -- "prod"
+# → clp_a1b2c3d4...  (copy this)
+
+# Build and start all 4 services
+ENGINE_API_KEY=clp_a1b2c3d4... docker compose up -d --build
 ```
 
-Then generate an API key inside the container:
-```bash
-docker compose exec engine npm run create-api-key -w packages/engine -- "prod"
-```
+| Service | URL |
+|---------|-----|
+| Engine API | http://localhost:3000 |
+| Web UI | http://localhost:3001 |
 
 ---
 
@@ -189,7 +220,7 @@ docker compose exec engine npm run create-api-key -w packages/engine -- "prod"
 **`ffmpeg: not found`**
 FFmpeg is not on your PATH. Install it (see Prerequisites) and verify with `ffmpeg -version`.
 
-**`Error: DATABASE_URL is required`**
+**`[startup] Missing required env var: DATABASE_URL`**
 You didn't set `DATABASE_URL` in your environment. Either copy `.env.example` → `.env` or export the variable:
 ```bash
 export DATABASE_URL=postgres://postgres:clipchat@localhost:5432/clipchat

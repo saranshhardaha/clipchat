@@ -22,11 +22,14 @@ It handles the FFmpeg heavy-lifting so you can focus on building interfaces — 
 | Feature | Detail |
 |---------|--------|
 | 10 FFmpeg tools | trim, merge, resize, extract audio, replace audio, add text, add subtitles, change speed, export, get info |
-| Async job queue | BullMQ + Redis; jobs survive server restarts |
+| Async job queue | BullMQ + Redis; jobs survive server restarts; 3 retries with exponential backoff |
 | SSE streaming | Real-time progress updates via Server-Sent Events |
+| AI chat | OpenRouter streaming with tool calling; `/chat` endpoint → NL → FFmpeg jobs |
+| Session history | Chat sessions and messages persisted to PostgreSQL |
 | MCP server | All 10 tools accessible to AI agents via stdio |
-| Local + S3 storage | Pluggable storage adapter |
+| Local + S3 storage | Pluggable storage adapter; DB-backed path lookup survives restarts |
 | API key auth | SHA-256 hashed keys in PostgreSQL |
+| Web UI | Self-hosted Next.js UI on :3001 — chat, video player, edit timeline |
 | TypeScript + Zod | End-to-end type safety with schema validation |
 
 ---
@@ -37,19 +40,34 @@ It handles the FFmpeg heavy-lifting so you can focus on building interfaces — 
 git clone https://github.com/your-org/clipchat.git
 cd clipchat
 cp .env.example .env
-
-docker compose up -d
 ```
 
-The API is now running at `http://localhost:3000`.
+Generate an API key for the web UI (required before starting):
+```bash
+# Start infra only to run the key generator
+docker compose up -d postgres redis
+npm install
+npm run db:migrate -w packages/engine
+npm run create-api-key -w packages/engine -- "prod"
+# → clp_a1b2c3d4...  (copy this)
+```
+
+Start the full stack:
+```bash
+ENGINE_API_KEY=clp_a1b2c3d4... docker compose up -d
+```
+
+Set `OPENROUTER_API_KEY` in `.env` if you want AI chat (`/api/v1/chat`).
+
+| Service | URL |
+|---------|-----|
+| Engine API | http://localhost:3000 |
+| Web UI | http://localhost:3001 |
 
 ```bash
-# Verify
+# Verify engine
 curl http://localhost:3000/health
 # {"status":"ok","version":"0.1.0"}
-
-# Generate your first API key
-docker compose exec engine npm run create-api-key -w packages/engine -- "mykey"
 ```
 
 > Full local dev setup (without Docker): [Getting Started →](docs/getting-started.md)
@@ -59,15 +77,19 @@ docker compose exec engine npm run create-api-key -w packages/engine -- "mykey"
 ## Architecture
 
 ```
-HTTP Client / AI Agent
+HTTP Client / AI Agent / Web UI (:3001)
         │
         ▼
   Express API (:3000)
-  ├── POST /api/v1/files/upload   → LocalStorage / S3
-  ├── POST /api/v1/jobs           → BullMQ Queue (Redis)
-  ├── GET  /api/v1/jobs/:id       → PostgreSQL (status poll)
-  ├── GET  /api/v1/jobs/:id/stream→ SSE progress stream
-  └── GET  /api/v1/tools          → tool manifest
+  ├── POST /api/v1/files/upload       → LocalStorage / S3
+  ├── GET  /api/v1/files/:id/content  → stream raw bytes (range requests)
+  ├── POST /api/v1/jobs               → BullMQ Queue (Redis)
+  ├── GET  /api/v1/jobs/:id           → PostgreSQL (status poll)
+  ├── GET  /api/v1/jobs/:id/stream    → SSE progress stream
+  ├── GET  /api/v1/tools              → tool manifest
+  ├── POST /api/v1/chat               → OpenRouter streaming + tool calls → SSE
+  ├── GET  /api/v1/sessions           → session list
+  └── GET  /api/v1/sessions/:id/messages → chat history
         │
         ▼
   BullMQ Worker
@@ -82,9 +104,15 @@ HTTP Client / AI Agent
   ─────────────────────────────
   MCP Server (stdio, --mcp flag)
   └── 10 tools → FFmpeg direct (synchronous)
+
+  ─────────────────────────────
+  Web UI (packages/web, :3001)
+  └── Next.js proxy → engine API (Bearer token injected server-side)
 ```
 
 **Job flow:** `POST /jobs` → BullMQ queue → worker → FFmpeg → DB update → client polls `GET /jobs/:id` or streams via SSE.
+
+**Chat flow:** `POST /chat { message, file_id? }` → OpenRouter streaming with tool calling → SSE events (`text`, `tool_call`, `done`). Tool calls submit jobs to BullMQ; all turns persisted to `sessions`/`chat_messages`.
 
 **MCP flow:** AI agent calls tool → FFmpeg runs synchronously → result returned immediately.
 
@@ -97,6 +125,7 @@ HTTP Client / AI Agent
 | `GET` | `/health` | Health check |
 | `POST` | `/api/v1/files/upload` | Upload a video/audio file |
 | `GET` | `/api/v1/files/:id` | Get file metadata |
+| `GET` | `/api/v1/files/:id/content` | Stream file bytes (supports Range requests) |
 | `DELETE` | `/api/v1/files/:id` | Delete a file |
 | `POST` | `/api/v1/jobs` | Submit an async job |
 | `GET` | `/api/v1/jobs/:id` | Poll job status |
@@ -104,6 +133,9 @@ HTTP Client / AI Agent
 | `DELETE` | `/api/v1/jobs/:id` | Cancel a job |
 | `GET` | `/api/v1/tools` | List available tools |
 | `POST` | `/api/v1/tools/:name` | Direct tool invocation (async) |
+| `POST` | `/api/v1/chat` | AI chat with tool calling → SSE stream |
+| `GET` | `/api/v1/sessions` | List chat sessions |
+| `GET` | `/api/v1/sessions/:id/messages` | Fetch session message history |
 
 All `/api/v1/*` endpoints require `Authorization: Bearer <api-key>` header (except `GET /health`).
 
@@ -177,9 +209,9 @@ Claude Desktop config:
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| Phase 1 | ✅ Complete | Open-source backend — REST API + MCP server (this repo) |
-| Phase 2 | Planned | AI/Claude intent layer — `/chat` endpoint, NL → tool calls |
-| Phase 3 | Planned | SaaS UI — Next.js, Clerk auth, Stripe billing |
+| Phase 1 | ✅ Complete | Open-source backend — REST API + MCP server |
+| Phase 2 | ✅ Complete | AI/Claude chat layer — `/chat` endpoint, NL → tool calls, session history |
+| Phase 3 | ✅ Complete | Self-hosted web UI — Next.js, video player, edit timeline, chat interface |
 
 ---
 
