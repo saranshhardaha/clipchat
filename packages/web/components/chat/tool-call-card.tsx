@@ -33,7 +33,11 @@ export function ToolCallCard({ toolCall, onLoadInPlayer }: ToolCallCardProps) {
   const outputFileId = job?.output?.output_file as string | undefined;
 
   return (
-    <div className="mt-2 rounded-lg border border-border bg-card p-3 text-sm space-y-2">
+    <div
+      className="mt-2 rounded-lg border border-border bg-card p-3 text-sm space-y-2"
+      role="region"
+      aria-label={`Tool: ${label}`}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-muted-foreground" />

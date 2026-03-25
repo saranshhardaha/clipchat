@@ -41,11 +41,14 @@ export function MessageBubble({ message, onLoadInPlayer }: MessageBubbleProps) {
 
         {/* Streaming indicator */}
         {!isUser && !message.content && message.toolCalls.length === 0 && (
-          <span className="flex gap-0.5 items-center h-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:0ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:150ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:300ms]" />
+          <span className="flex gap-0.5 items-center h-4" aria-hidden="true">
+            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 motion-safe:animate-bounce [animation-delay:0ms]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 motion-safe:animate-bounce [animation-delay:150ms]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 motion-safe:animate-bounce [animation-delay:300ms]" />
           </span>
+        )}
+        {!isUser && !message.content && message.toolCalls.length === 0 && (
+          <span className="sr-only">Generating response…</span>
         )}
       </div>
     </div>

@@ -12,7 +12,7 @@ export function Sidebar() {
   const { data: sessions = [], isLoading } = useSessionsList();
 
   return (
-    <aside className="flex w-60 flex-col border-r border-border bg-background">
+    <aside className="flex w-60 flex-col border-r border-border bg-background" aria-label="Chat sessions">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3">
         <Video className="h-5 w-5 text-primary" />

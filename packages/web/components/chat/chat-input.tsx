@@ -96,7 +96,7 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
           className="h-9 w-9 shrink-0"
           onClick={() => fileInputRef.current?.click()}
           disabled={isStreaming || isUploading}
-          title="Upload video"
+          aria-label="Upload video or audio"
         >
           {isUploading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -122,7 +122,7 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
           className="h-9 w-9 shrink-0"
           onClick={handleSend}
           disabled={!text.trim() || isStreaming}
-          title="Send message"
+          aria-label="Send message"
         >
           {isStreaming ? (
             <Loader2 className="h-4 w-4 animate-spin" />

@@ -33,7 +33,13 @@ export function MessageList({ messages, onLoadInPlayer }: MessageListProps) {
   }
 
   return (
-    <div ref={scrollAreaRef} className="flex-1 overflow-y-auto">
+    <div
+      ref={scrollAreaRef}
+      className="flex-1 overflow-y-auto"
+      role="log"
+      aria-live="polite"
+      aria-label="Chat messages"
+    >
       <div className="space-y-3 p-4">
         {messages.map((message) => (
           <MessageBubble
