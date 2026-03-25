@@ -213,6 +213,11 @@ describe('Chat API', () => {
       url: `/files/${fileId}/content`,
     });
 
+    // Access the exposed mockCreate so we can inspect what was passed to the AI client
+    const aiModule = await import('../../src/ai/tools.js');
+    const mockCreate = (aiModule as unknown as { _mockCreate: ReturnType<typeof vi.fn> })._mockCreate;
+    mockCreate.mockClear();
+
     try {
       const { status, events } = await sseRequest(app, apiKey, {
         message: 'What is in my video?',
@@ -222,6 +227,13 @@ describe('Chat API', () => {
       expect(status).toBe(200);
       const doneEvents = events.filter(e => e.event === 'done');
       expect(doneEvents.length).toBe(1);
+
+      // Verify the DB-looked-up file path was actually passed to the AI client
+      expect(mockCreate).toHaveBeenCalledOnce();
+      const callArgs = mockCreate.mock.calls[0][0] as { messages: Array<{ role: string; content: string }> };
+      const systemMessage = callArgs.messages.find(m => m.role === 'system');
+      expect(systemMessage).toBeDefined();
+      expect(systemMessage!.content).toContain(tmpPath);
     } finally {
       // Cleanup
       await db.delete(files).where(eq(files.id, fileId));
