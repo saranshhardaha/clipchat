@@ -9,7 +9,16 @@ export function getQueue(): Queue {
   if (_queue) return _queue;
   const url = process.env.REDIS_URL ?? 'redis://localhost:6379';
   const connection = { host: new URL(url).hostname, port: Number(new URL(url).port || 6379) };
-  _queue = new Queue(QUEUE_NAME, { connection });
+  _queue = new Queue(QUEUE_NAME, {
+    connection,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+      timeout: 10 * 60 * 1000,        // 10-minute stall timeout per attempt
+      removeOnComplete: { count: 100 },
+      removeOnFail:    { count: 100 },
+    },
+  });
   return _queue;
 }
 
