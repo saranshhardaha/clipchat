@@ -157,81 +157,85 @@ export function useChat(initialSessionId?: string): UseChatReturn {
         const decoder = new TextDecoder();
         let buffer = '';
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-          const blocks = buffer.split('\n\n');
-          buffer = blocks.pop() ?? '';
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split('\n\n');
+            buffer = blocks.pop() ?? '';
 
-          for (const block of blocks) {
-            if (!block.trim()) continue;
+            for (const block of blocks) {
+              if (!block.trim()) continue;
 
-            const lines = block.split('\n');
-            let eventName = '';
-            let dataStr = '';
+              const lines = block.split('\n');
+              let eventName = '';
+              let dataStr = '';
 
-            for (const line of lines) {
-              if (line.startsWith('event: ')) eventName = line.slice(7).trim();
-              if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
-            }
-
-            if (!dataStr) continue;
-
-            let payload: Record<string, unknown>;
-            try {
-              payload = JSON.parse(dataStr) as Record<string, unknown>;
-            } catch {
-              continue;
-            }
-
-            if (eventName === 'text') {
-              const delta = payload.delta as string;
-              setMessages((prev) =>
-                prev.map((m, i) =>
-                  i === prev.length - 1
-                    ? { ...m, content: m.content + delta }
-                    : m
-                )
-              );
-            } else if (eventName === 'tool_call') {
-              const card: ToolCallCard = {
-                id: `tc-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                tool: payload.tool as string,
-                job_id: payload.job_id as string,
-                input: (payload.input as Record<string, unknown>) ?? {},
-              };
-              setMessages((prev) =>
-                prev.map((m, i) =>
-                  i === prev.length - 1
-                    ? { ...m, toolCalls: [...m.toolCalls, card] }
-                    : m
-                )
-              );
-            } else if (eventName === 'done') {
-              const newSessionId = payload.session_id as string;
-              const realMsgId = payload.message_id as string;
-              setSessionId(newSessionId);
-              setMessages((prev) =>
-                prev.map((m, i) =>
-                  i === prev.length - 1 ? { ...m, id: realMsgId } : m
-                )
-              );
-              if (!sessionId) {
-                router.push(`/chat/${newSessionId}`);
+              for (const line of lines) {
+                if (line.startsWith('event: ')) eventName = line.slice(7).trim();
+                if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
               }
-            } else if (eventName === 'error') {
-              const errMsg = payload.message as string;
-              setMessages((prev) =>
-                prev.map((m, i) =>
-                  i === prev.length - 1
-                    ? { ...m, content: m.content + `\n\n[Error: ${errMsg}]` }
-                    : m
-                )
-              );
+
+              if (!dataStr) continue;
+
+              let payload: Record<string, unknown>;
+              try {
+                payload = JSON.parse(dataStr) as Record<string, unknown>;
+              } catch {
+                continue;
+              }
+
+              if (eventName === 'text') {
+                const delta = payload.delta as string;
+                setMessages((prev) =>
+                  prev.map((m, i) =>
+                    i === prev.length - 1
+                      ? { ...m, content: m.content + delta }
+                      : m
+                  )
+                );
+              } else if (eventName === 'tool_call') {
+                const card: ToolCallCard = {
+                  id: `tc-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  tool: payload.tool as string,
+                  job_id: payload.job_id as string,
+                  input: (payload.input as Record<string, unknown>) ?? {},
+                };
+                setMessages((prev) =>
+                  prev.map((m, i) =>
+                    i === prev.length - 1
+                      ? { ...m, toolCalls: [...m.toolCalls, card] }
+                      : m
+                  )
+                );
+              } else if (eventName === 'done') {
+                const newSessionId = payload.session_id as string;
+                const realMsgId = payload.message_id as string;
+                setSessionId(newSessionId);
+                setMessages((prev) =>
+                  prev.map((m, i) =>
+                    i === prev.length - 1 ? { ...m, id: realMsgId } : m
+                  )
+                );
+                if (!sessionId) {
+                  router.push(`/chat/${newSessionId}`);
+                }
+              } else if (eventName === 'error') {
+                const errMsg = payload.message as string;
+                setMessages((prev) =>
+                  prev.map((m, i) =>
+                    i === prev.length - 1
+                      ? { ...m, content: m.content + `\n\n[Error: ${errMsg}]` }
+                      : m
+                  )
+                );
+              }
             }
           }
+        } finally {
+          reader.releaseLock();
         }
       } catch (err: unknown) {
         if ((err as Error).name !== 'AbortError') {
