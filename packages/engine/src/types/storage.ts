@@ -12,7 +12,5 @@ export interface FileRecord {
 
 export interface StorageAdapter {
   save(stream: Readable, originalName: string, mimeType: string, sizeBytes: number): Promise<FileRecord>;
-  getPath(fileId: string): Promise<string>;
-  getUrl(fileId: string): Promise<string>;
-  delete(fileId: string): Promise<void>;
+  delete(fileId: string, filePath?: string): Promise<void>;
 }

@@ -3,11 +3,10 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuid } from 'uuid';
 import type { Readable } from 'stream';
 import type { StorageAdapter, FileRecord } from '../types/storage.js';
-import { AppError } from '../types/job.js';
 
 export class S3StorageAdapter implements StorageAdapter {
   private s3: S3Client;
-  private records = new Map<string, { key: string; record: FileRecord }>();
+  private records = new Map<string, { key: string }>();
 
   constructor(
     private readonly bucket: string,
@@ -37,26 +36,21 @@ export class S3StorageAdapter implements StorageAdapter {
       url: await this.getSignedDownloadUrl(key),
       created_at: new Date(),
     };
-    this.records.set(id, { key, record });
+    this.records.set(id, { key });
     return record;
   }
 
-  async getPath(fileId: string): Promise<string> {
+  async delete(fileId: string, filePath?: string): Promise<void> {
     const entry = this.records.get(fileId);
-    if (!entry) throw new AppError(404, `File ${fileId} not found`);
-    return entry.record.path;
-  }
-
-  async getUrl(fileId: string): Promise<string> {
-    const entry = this.records.get(fileId);
-    if (!entry) throw new AppError(404, `File ${fileId} not found`);
-    return this.getSignedDownloadUrl(entry.key);
-  }
-
-  async delete(fileId: string): Promise<void> {
-    const entry = this.records.get(fileId);
-    if (!entry) return;
-    await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: entry.key }));
+    let key: string | undefined;
+    if (entry) {
+      key = entry.key;
+    } else if (filePath?.startsWith(`s3://${this.bucket}/`)) {
+      // Derive key from stored path: s3://bucket/uploads/id.ext → uploads/id.ext
+      key = filePath.slice(`s3://${this.bucket}/`.length);
+    }
+    if (!key) return;
+    await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
     this.records.delete(fileId);
   }
 

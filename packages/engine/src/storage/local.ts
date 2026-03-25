@@ -5,11 +5,8 @@ import { join } from 'path';
 import { v4 as uuid } from 'uuid';
 import type { Readable } from 'stream';
 import type { StorageAdapter, FileRecord } from '../types/storage.js';
-import { AppError } from '../types/job.js';
 
 export class LocalStorageAdapter implements StorageAdapter {
-  private records = new Map<string, FileRecord>();
-
   constructor(private readonly baseDir: string = './uploads') {}
 
   async save(stream: Readable, originalName: string, mimeType: string, sizeBytes: number): Promise<FileRecord> {
@@ -19,7 +16,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     const savedName = `${id}.${ext}`;
     const filePath = join(this.baseDir, savedName);
     await pipeline(stream, createWriteStream(filePath));
-    const record: FileRecord = {
+    return {
       id,
       original_name: originalName,
       mime_type: mimeType,
@@ -28,26 +25,9 @@ export class LocalStorageAdapter implements StorageAdapter {
       url: `/files/${id}`,
       created_at: new Date(),
     };
-    this.records.set(id, record);
-    return record;
   }
 
-  async getPath(fileId: string): Promise<string> {
-    const record = this.records.get(fileId);
-    if (!record) throw new AppError(404, `File ${fileId} not found`);
-    return record.path;
-  }
-
-  async getUrl(fileId: string): Promise<string> {
-    const record = this.records.get(fileId);
-    if (!record) throw new AppError(404, `File ${fileId} not found`);
-    return record.url;
-  }
-
-  async delete(fileId: string): Promise<void> {
-    const record = this.records.get(fileId);
-    if (!record) return;
-    await unlink(record.path).catch(() => {});
-    this.records.delete(fileId);
+  async delete(_fileId: string, filePath?: string): Promise<void> {
+    if (filePath) await unlink(filePath).catch(() => {});
   }
 }
