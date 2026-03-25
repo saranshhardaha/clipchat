@@ -5,10 +5,11 @@ const ENGINE_API_KEY = process.env.ENGINE_API_KEY ?? '';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
   let upstream: Response;
   try {
-    upstream = await fetch(`${ENGINE_URL}/api/v1/sessions`, {
+    upstream = await fetch(`${ENGINE_URL}/api/v1/sessions?${searchParams.toString()}`, {
       headers: { 'Authorization': `Bearer ${ENGINE_API_KEY}` },
     });
   } catch {
