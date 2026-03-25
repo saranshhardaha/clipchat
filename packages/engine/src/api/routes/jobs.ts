@@ -12,7 +12,7 @@ import {
   GetVideoInfoInputSchema,
 } from '../../types/tools.js';
 
-const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; error?: { message: string }; data?: unknown } }> = {
+const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; error?: { issues: { message: string }[] }; data?: unknown } }> = {
   trim_video:        TrimVideoInputSchema,
   merge_clips:       MergeClipsInputSchema,
   add_subtitles:     AddSubtitlesInputSchema,
@@ -38,7 +38,7 @@ router.post('/jobs', async (req, res, next) => {
     }
     const parsed = TOOL_SCHEMAS[tool].safeParse(input);
     if (!parsed.success) {
-      throw new AppError(400, parsed.error!.message);
+      throw new AppError(400, parsed.error!.issues.map(i => i.message).join('; '));
     }
     const jobId = await submitJob(tool as ToolName, parsed.data as Record<string, unknown>);
     await db.insert(jobs).values({
