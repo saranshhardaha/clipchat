@@ -29,3 +29,25 @@ export async function GET(
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${ENGINE_URL}/api/v1/jobs/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${ENGINE_API_KEY}` },
+    });
+  } catch {
+    return new Response(JSON.stringify({ error: 'Engine unreachable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  return new Response(null, { status: upstream.status });
+}

@@ -1,5 +1,5 @@
 // Validate required env vars before any connection is attempted
-const REQUIRED_ENV = ['DATABASE_URL', 'REDIS_URL'];
+const REQUIRED_ENV = ['DATABASE_URL', 'REDIS_URL', 'OPENROUTER_API_KEY'];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
     console.error(`[startup] Missing required env var: ${key}`);

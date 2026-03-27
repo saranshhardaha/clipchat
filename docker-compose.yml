@@ -28,7 +28,7 @@ services:
       REDIS_URL: redis://redis:6379
       STORAGE_DRIVER: local
       UPLOAD_DIR: /data/uploads
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
     volumes: [uploads:/data/uploads]
     depends_on:
       postgres: {condition: service_healthy}
@@ -41,7 +41,7 @@ services:
     ports: ["3001:3001"]
     environment:
       ENGINE_URL: http://engine:3000
-      ENGINE_API_KEY: ${ENGINE_API_KEY}
+      ENGINE_API_KEY: ${ENGINE_API_KEY}   # Generate: ./setup.sh (run once before docker compose up)
     depends_on:
       engine:
         condition: service_started

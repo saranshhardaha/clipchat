@@ -3,8 +3,8 @@ import path from 'path';
 import type { ChatCompletionMessageToolCall } from 'openai/resources/chat/completions.js';
 import { db } from '../../db/index.js';
 import { jobs, files, chatMessages } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
-import { submitJob } from '../../queue/index.js';
+import { eq, inArray } from 'drizzle-orm';
+import { submitJob, generateJobId } from '../../queue/index.js';
 import { AppError } from '../../types/job.js';
 import type { ToolName } from '../../types/job.js';
 import type { ChatRequest } from '../../types/chat.js';
@@ -110,7 +110,7 @@ router.post('/chat', async (req, res, next) => {
     headersFlushed = true;
 
     const client = createOpenRouterClient();
-    const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-haiku';
+    const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-sonnet-4-5';
 
     // --- First LLM call: stream text + collect tool calls ---
     const abort1 = new AbortController();
@@ -170,10 +170,11 @@ router.post('/chat', async (req, res, next) => {
         input = {};
       }
 
-      const jobId = await submitJob(tc.name as ToolName, input);
+      const jobId = generateJobId();
       await db.insert(jobs).values({
         id: jobId, status: 'queued', tool: tc.name, input, output: null, progress: 0, error: null,
       });
+      await submitJob(tc.name as ToolName, input, jobId);
 
       sendEvent('tool_call', { tool: tc.name, job_id: jobId, input });
 
@@ -205,22 +206,28 @@ router.post('/chat', async (req, res, next) => {
       const SYNTHESIS_TIMEOUT = 60_000;
       const POLL_INTERVAL = 1_000;
       const pollStart = Date.now();
-      const jobResults = new Map<string, { status: string; output: unknown }>();
+      const jobResults = new Map<string, { status: string; output: unknown; error: string | null }>();
+      const toolCallIdByJobId = new Map(toolCallJobs.map(t => [t.jobId, t.toolCallId]));
 
       while (Date.now() - pollStart < SYNTHESIS_TIMEOUT) {
-        const pending = toolCallJobs.filter(t => !jobResults.has(t.jobId));
-        if (pending.length === 0) break;
+        const pendingIds = toolCallJobs
+          .filter(t => !jobResults.has(t.jobId))
+          .map(t => t.jobId);
+        if (pendingIds.length === 0) break;
 
         await new Promise<void>(r => setTimeout(r, POLL_INTERVAL));
 
-        for (const { jobId, toolCallId } of pending) {
-          const [row] = await db.select().from(jobs).where(eq(jobs.id, jobId));
-          if (row && (row.status === 'completed' || row.status === 'failed')) {
-            jobResults.set(jobId, { status: row.status, output: row.output });
-            // Update tool message in DB with result
-            await db.update(chatMessages)
-              .set({ content: JSON.stringify({ job_id: jobId, status: row.status, output: row.output }) })
-              .where(eq(chatMessages.tool_call_id, toolCallId));
+        // Batch query — one DB round-trip per poll cycle regardless of job count
+        const rows = await db.select().from(jobs).where(inArray(jobs.id, pendingIds));
+        for (const row of rows) {
+          if (row.status === 'completed' || row.status === 'failed') {
+            jobResults.set(row.id, { status: row.status, output: row.output, error: row.error });
+            const toolCallId = toolCallIdByJobId.get(row.id);
+            if (toolCallId) {
+              await db.update(chatMessages)
+                .set({ content: JSON.stringify({ job_id: row.id, status: row.status, output: row.output, error: row.error }) })
+                .where(eq(chatMessages.tool_call_id, toolCallId));
+            }
           }
         }
       }
