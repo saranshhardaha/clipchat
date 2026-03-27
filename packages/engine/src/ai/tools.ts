@@ -30,6 +30,18 @@ function zodTypeToJsonSchema(zodType: z.ZodTypeAny): Record<string, unknown> {
   if (zodType instanceof z.ZodObject) {
     return zodObjectToJsonSchema(zodType);
   }
+  if (zodType instanceof z.ZodLiteral) {
+    return { type: typeof zodType.value, enum: [zodType.value] };
+  }
+  if (zodType instanceof z.ZodUnion) {
+    const options = zodType.options as z.ZodTypeAny[];
+    // Collapse union of literals into a single enum (cleaner for LLMs)
+    if (options.every((o) => o instanceof z.ZodLiteral)) {
+      const values = options.map((o) => (o as z.ZodLiteral<unknown>).value);
+      return { type: typeof values[0], enum: values };
+    }
+    return { oneOf: options.map(zodTypeToJsonSchema) };
+  }
   throw new Error(`Unsupported Zod type: ${zodType.constructor.name}`);
 }
 
