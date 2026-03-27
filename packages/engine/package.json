@@ -5,13 +5,13 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_OPTIONS='--env-file=../../.env' tsx watch src/index.ts",
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "create-api-key": "tsx src/scripts/create-api-key.ts"
+    "db:generate": "NODE_OPTIONS='--env-file=../../.env' drizzle-kit generate",
+    "db:migrate": "NODE_OPTIONS='--env-file=../../.env' drizzle-kit migrate",
+    "create-api-key": "NODE_OPTIONS='--env-file=../../.env' tsx src/scripts/create-api-key.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
