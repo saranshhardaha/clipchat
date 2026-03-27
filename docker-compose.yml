@@ -22,7 +22,7 @@ services:
   engine:
     build: .
     ports: ["3000:3000"]
-    command: sh -c "node packages/engine/dist/db/migrate.js && node packages/engine/dist/index.js"
+    command: node packages/engine/dist/index.js
     environment:
       DATABASE_URL: postgres://postgres:clipchat@postgres:5432/clipchat
       REDIS_URL: redis://redis:6379

@@ -11,6 +11,10 @@ if (process.argv.includes('--mcp')) {
   const { startMcpServer } = await import('./mcp/index.js');
   startMcpServer();
 } else {
+  // Run DB migrations before starting (idempotent — safe to run every startup)
+  const { runMigrations } = await import('./db/migrate.js');
+  await runMigrations();
+
   // Dynamic imports so env validation runs first (static imports are hoisted in ESM)
   const { server } = await import('./api/server.js');
   const { createWorker } = await import('./queue/worker.js');
