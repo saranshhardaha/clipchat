@@ -29,6 +29,7 @@ services:
       STORAGE_DRIVER: local
       UPLOAD_DIR: /data/uploads
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-sonnet-4-5}
     volumes: [uploads:/data/uploads]
     depends_on:
       postgres: {condition: service_healthy}

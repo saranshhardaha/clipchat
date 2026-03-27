@@ -154,7 +154,14 @@ export function useChat(initialSessionId?: string): UseChatReturn {
         });
 
         if (!res.ok || !res.body) {
-          throw new Error(`Chat request failed: ${res.status}`);
+          // Surface the actual engine error message
+          let errMsg = `Chat request failed (${res.status})`;
+          try {
+            const txt = await res.text();
+            const parsed = JSON.parse(txt) as { error?: string; message?: string };
+            errMsg = parsed.error ?? parsed.message ?? txt.slice(0, 200) ?? errMsg;
+          } catch { /* use default */ }
+          throw new Error(errMsg);
         }
 
         const reader = res.body.getReader();
@@ -251,9 +258,10 @@ export function useChat(initialSessionId?: string): UseChatReturn {
         }
       } catch (err: unknown) {
         if ((err as Error).name !== 'AbortError') {
+          const errorMessage = err instanceof Error ? err.message : undefined;
           setMessages((prev) =>
             prev.map((m, i) =>
-              i === prev.length - 1 ? { ...m, hasError: true } : m
+              i === prev.length - 1 ? { ...m, hasError: true, errorMessage } : m
             )
           );
         }

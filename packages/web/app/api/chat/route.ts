@@ -26,7 +26,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (!upstream.ok || !upstream.body) {
-    return new Response(await upstream.text(), { status: upstream.status });
+    const body = await upstream.text();
+    console.error(`[chat proxy] engine ${upstream.status}:`, body.slice(0, 300));
+    return new Response(body, {
+      status: upstream.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   return new Response(upstream.body, {
