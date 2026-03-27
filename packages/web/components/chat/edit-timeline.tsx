@@ -22,7 +22,7 @@ export function EditTimeline({ steps, activeJobId, onStepSelect }: EditTimelineP
 
   return (
     <div className="flex h-full items-center border-t border-border px-3">
-      <ScrollArea className="w-full" orientation="horizontal">
+      <ScrollArea className="w-full">
         <div className="flex items-center gap-1.5 py-2">
           <span className="shrink-0 text-xs font-medium text-muted-foreground mr-1">Timeline</span>
           {steps.map((step, i) => (
