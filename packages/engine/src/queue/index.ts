@@ -14,7 +14,6 @@ export function getQueue(): Queue {
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 2000 },
-      timeout: 10 * 60 * 1000,        // 10-minute stall timeout per attempt
       removeOnComplete: { count: 100 },
       removeOnFail:    { count: 100 },
     },
@@ -32,8 +31,12 @@ export function getQueueEvents(): QueueEvents {
   return _queueEvents;
 }
 
-export async function submitJob(tool: ToolName, input: Record<string, unknown>): Promise<string> {
-  const jobId = `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  await getQueue().add(jobId, { tool, input }, { jobId });
-  return jobId;
+export function generateJobId(): string {
+  return `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export async function submitJob(tool: ToolName, input: Record<string, unknown>, jobId?: string): Promise<string> {
+  const id = jobId ?? generateJobId();
+  await getQueue().add(id, { tool, input }, { jobId: id });
+  return id;
 }

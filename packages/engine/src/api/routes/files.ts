@@ -17,7 +17,7 @@ const upload = multer({
     if (/^(video|audio)\//.test(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new AppError(415, `Unsupported file type: ${file.mimetype}. Only video and audio files are accepted.`) as Error, false);
+      cb(null, false);
     }
   },
 });

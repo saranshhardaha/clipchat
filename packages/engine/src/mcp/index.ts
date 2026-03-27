@@ -6,9 +6,10 @@ export function createMcpServer(): McpServer {
   const server = new McpServer({ name: 'clipchat', version: '0.1.0' });
 
   for (const tool of MCP_TOOLS) {
-    server.tool(tool.name, tool.description, tool.schema.shape, async (input) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    server.tool(tool.name, tool.description, tool.schema.shape, async (input: any) => {
       const result = await tool.handler(input);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
     });
   }
 

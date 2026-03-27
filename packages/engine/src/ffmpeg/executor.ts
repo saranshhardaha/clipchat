@@ -20,7 +20,7 @@ export function runFfmpeg(
     if (opts.onProgress) {
       command.on('progress', (p) => opts.onProgress!(p.percent ?? 0));
     }
-    command.on('end', resolve).on('error', (err) => reject(new Error(err.message)));
+    command.on('end', () => resolve()).on('error', (err) => reject(new Error(err.message)));
     command.run();
   });
 }

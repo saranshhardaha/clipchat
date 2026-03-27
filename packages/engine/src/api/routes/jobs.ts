@@ -2,14 +2,16 @@ import { Router } from 'express';
 import { db } from '../../db/index.js';
 import { jobs } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { submitJob, getQueue, getQueueEvents } from '../../queue/index.js';
+import { submitJob, generateJobId, getQueue, getQueueEvents } from '../../queue/index.js';
 import { AppError } from '../../types/job.js';
 import type { ToolName } from '../../types/job.js';
+import type { JobProgress } from 'bullmq';
 import {
   TrimVideoInputSchema, MergeClipsInputSchema, AddSubtitlesInputSchema,
   AddTextOverlayInputSchema, ResizeVideoInputSchema, ExtractAudioInputSchema,
   ReplaceAudioInputSchema, ChangeSpeedInputSchema, ExportVideoInputSchema,
-  GetVideoInfoInputSchema,
+  GetVideoInfoInputSchema, CropVideoInputSchema, RotateFlipInputSchema,
+  ColorAdjustInputSchema,
 } from '../../types/tools.js';
 
 const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; error?: { issues: { message: string }[] }; data?: unknown } }> = {
@@ -18,6 +20,9 @@ const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; 
   add_subtitles:     AddSubtitlesInputSchema,
   add_text_overlay:  AddTextOverlayInputSchema,
   resize_video:      ResizeVideoInputSchema,
+  crop_video:        CropVideoInputSchema,
+  rotate_flip:       RotateFlipInputSchema,
+  color_adjust:      ColorAdjustInputSchema,
   extract_audio:     ExtractAudioInputSchema,
   replace_audio:     ReplaceAudioInputSchema,
   change_speed:      ChangeSpeedInputSchema,
@@ -40,10 +45,11 @@ router.post('/jobs', async (req, res, next) => {
     if (!parsed.success) {
       throw new AppError(400, parsed.error!.issues.map(i => i.message).join('; '));
     }
-    const jobId = await submitJob(tool as ToolName, parsed.data as Record<string, unknown>);
+    const jobId = generateJobId();
     await db.insert(jobs).values({
       id: jobId, status: 'queued', tool, input, output: null, progress: 0, error: null,
     });
+    await submitJob(tool as ToolName, parsed.data as Record<string, unknown>, jobId);
     res.status(202).json({ id: jobId, status: 'queued', tool, input, output: null, progress: 0, error: null });
   } catch (err) { next(err); }
 });
@@ -77,7 +83,7 @@ router.get('/jobs/:id/stream', async (req, res, next) => {
 
     const queueEvents = getQueueEvents();
 
-    const onProgress = ({ jobId: id, data }: { jobId: string; data: number }) => {
+    const onProgress = ({ jobId: id, data }: { jobId: string; data: JobProgress }) => {
       if (id !== jobId) return;
       send({ id: jobId, status: 'processing', progress: data });
     };

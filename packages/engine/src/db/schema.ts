@@ -23,9 +23,9 @@ export const jobs = pgTable('jobs', {
   file_id: text('file_id').references(() => files.id),
   created_at: timestamp('created_at').defaultNow().notNull(),
   completed_at: timestamp('completed_at'),
-}, (t) => [
-  index('idx_jobs_file_id').on(t.file_id),
-]);
+}, (t) => ({
+  idx_jobs_file_id: index('idx_jobs_file_id').on(t.file_id),
+}));
 
 export const apiKeys = pgTable('api_keys', {
   id: text('id').primaryKey(),
@@ -40,10 +40,10 @@ export const sessions = pgTable('sessions', {
   title: text('title'),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
-}, (t) => [
-  index('idx_sessions_api_key_id').on(t.api_key_id),
-  index('idx_sessions_updated_at').on(t.updated_at),
-]);
+}, (t) => ({
+  idx_sessions_api_key_id: index('idx_sessions_api_key_id').on(t.api_key_id),
+  idx_sessions_updated_at: index('idx_sessions_updated_at').on(t.updated_at),
+}));
 
 export const chatMessages = pgTable('chat_messages', {
   id: text('id').primaryKey(),
@@ -53,7 +53,7 @@ export const chatMessages = pgTable('chat_messages', {
   tool_calls: jsonb('tool_calls'), // ChatCompletionMessageToolCall[] for assistant messages
   tool_call_id: text('tool_call_id'),  // links tool-result row to its tool call
   created_at: timestamp('created_at').defaultNow().notNull(),
-}, (t) => [
-  index('idx_chat_messages_session_id').on(t.session_id),
-  index('idx_chat_messages_created_at').on(t.created_at),
-]);
+}, (t) => ({
+  idx_chat_messages_session_id: index('idx_chat_messages_session_id').on(t.session_id),
+  idx_chat_messages_created_at: index('idx_chat_messages_created_at').on(t.created_at),
+}));
