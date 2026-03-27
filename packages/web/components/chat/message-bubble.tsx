@@ -30,7 +30,8 @@ export function MessageBubble({ message, onLoadInPlayer }: MessageBubbleProps) {
         {/* Error indicator */}
         {message.hasError && (
           <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-            <span aria-hidden>⚠</span> Something went wrong. Please try again.
+            <span aria-hidden>⚠</span>{' '}
+            {message.errorMessage ?? 'Something went wrong. Please try again.'}
           </p>
         )}
 

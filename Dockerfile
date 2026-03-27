@@ -11,7 +11,8 @@ RUN npm install --workspace=packages/engine
 COPY packages/engine/src ./packages/engine/src
 COPY packages/engine/tsconfig.json ./packages/engine/
 
-RUN npm run build -w packages/engine
+RUN npm run build -w packages/engine && \
+    cp -r packages/engine/src/db/migrations packages/engine/dist/db/migrations
 
 # Runner stage — production deps only
 FROM node:20-slim AS runner

@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useRef, useEffect, type MutableRefObject } from 'react';
 import { getSessionMessages, type ChatMessage } from '@/lib/engine-client';
 import { useInvalidateSessions } from './use-sessions-list';
 
@@ -18,6 +17,7 @@ export interface Message {
   content: string;
   toolCalls: ToolCallCard[];
   hasError?: boolean;
+  errorMessage?: string;
 }
 
 interface UseChatReturn {
@@ -46,13 +46,10 @@ function dbMessagesToDisplay(dbMessages: ChatMessage[]): Message[] {
       const toolCalls: ToolCallCard[] = [];
       if (msg.tool_calls) {
         for (const tc of msg.tool_calls) {
-          // tool_calls from DB don't have job_id directly — we look for it in the content
-          // The job_id was stored in the tool result message content as JSON: { job_id: "..." }
-          // For display purposes, we use the tc.id as a stable identifier
           toolCalls.push({
             id: tc.id,
             tool: tc.function.name,
-            job_id: '', // Will be populated from tool messages below
+            job_id: '',
             input: (() => {
               try { return JSON.parse(tc.function.arguments); } catch { return {}; }
             })(),
@@ -69,7 +66,6 @@ function dbMessagesToDisplay(dbMessages: ChatMessage[]): Message[] {
   }
 
   // Populate job_ids from tool messages
-  // Tool messages have content like '{"job_id":"job_xxx"}' and tool_call_id matching the tc.id
   const toolMsgMap = new Map<string, string>(); // tool_call_id -> job_id
   for (const msg of dbMessages) {
     if (msg.role === 'tool' && msg.tool_call_id) {
@@ -84,7 +80,6 @@ function dbMessagesToDisplay(dbMessages: ChatMessage[]): Message[] {
     }
   }
 
-  // Apply job_ids to tool calls in assistant messages
   for (const msg of result) {
     if (msg.role === 'assistant') {
       for (const tc of msg.toolCalls) {
@@ -98,12 +93,18 @@ function dbMessagesToDisplay(dbMessages: ChatMessage[]): Message[] {
 }
 
 export function useChat(initialSessionId?: string): UseChatReturn {
-  const router = useRouter();
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId ?? null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const loadedRef = useRef(false);
+  const pendingDelta = useRef('');
+  const rafId = useRef<number | null>(null);
+  const setMessagesRef = useRef(setMessages) as MutableRefObject<typeof setMessages>;
+  setMessagesRef.current = setMessages;
+  // Ref always holds latest sessionId — avoids stale closure in async SSE handler
+  const sessionIdRef = useRef<string | null>(sessionId);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   const invalidateSessions = useInvalidateSessions();
 
   // Load existing session messages on mount
@@ -146,7 +147,7 @@ export function useChat(initialSessionId?: string): UseChatReturn {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: text,
-            session_id: sessionId ?? undefined,
+            session_id: sessionIdRef.current ?? undefined,
             file_id: fileId,
           }),
           signal: abortRef.current.signal,
@@ -192,13 +193,21 @@ export function useChat(initialSessionId?: string): UseChatReturn {
 
               if (eventName === 'text') {
                 const delta = payload.delta as string;
-                setMessages((prev) =>
-                  prev.map((m, i) =>
-                    i === prev.length - 1
-                      ? { ...m, content: m.content + delta }
-                      : m
-                  )
-                );
+                pendingDelta.current += delta;
+                if (!rafId.current) {
+                  rafId.current = requestAnimationFrame(() => {
+                    const accumulated = pendingDelta.current;
+                    pendingDelta.current = '';
+                    rafId.current = null;
+                    setMessagesRef.current((prev) =>
+                      prev.map((m, i) =>
+                        i === prev.length - 1
+                          ? { ...m, content: m.content + accumulated }
+                          : m
+                      )
+                    );
+                  });
+                }
               } else if (eventName === 'tool_call') {
                 const card: ToolCallCard = {
                   id: `tc-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -216,19 +225,22 @@ export function useChat(initialSessionId?: string): UseChatReturn {
               } else if (eventName === 'done') {
                 const newSessionId = payload.session_id as string;
                 const realMsgId = payload.message_id as string;
+                const isNewSession = !sessionIdRef.current;
                 setSessionId(newSessionId);
                 setMessages((prev) =>
                   prev.map((m, i) =>
                     i === prev.length - 1 ? { ...m, id: realMsgId } : m
                   )
                 );
-                if (!sessionId) {
-                  router.push(`/chat/${newSessionId}`);
+                // Update URL without remounting the component (avoids DB reload race)
+                if (isNewSession) {
+                  window.history.pushState({}, '', `/chat/${newSessionId}`);
                 }
               } else if (eventName === 'error') {
+                const errorMessage = payload.message as string | undefined;
                 setMessages((prev) =>
                   prev.map((m, i) =>
-                    i === prev.length - 1 ? { ...m, hasError: true } : m
+                    i === prev.length - 1 ? { ...m, hasError: true, errorMessage } : m
                   )
                 );
               }
@@ -246,11 +258,24 @@ export function useChat(initialSessionId?: string): UseChatReturn {
           );
         }
       } finally {
+        if (rafId.current) {
+          cancelAnimationFrame(rafId.current);
+          rafId.current = null;
+          const remaining = pendingDelta.current;
+          pendingDelta.current = '';
+          if (remaining) {
+            setMessages((prev) =>
+              prev.map((m, i) =>
+                i === prev.length - 1 ? { ...m, content: m.content + remaining } : m
+              )
+            );
+          }
+        }
         setIsStreaming(false);
         invalidateSessions();
       }
     },
-    [sessionId, isStreaming, router, invalidateSessions]
+    [isStreaming, invalidateSessions]
   );
 
   return { messages, isStreaming, sessionId, sendMessage };

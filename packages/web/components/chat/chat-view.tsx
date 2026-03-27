@@ -16,6 +16,7 @@ export function ChatView({ initialSessionId }: ChatViewProps) {
   const { messages, isStreaming, sendMessage } = useChat(initialSessionId);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [playerFileId, setPlayerFileId] = useState<string | null>(null);
+  const [sourceFileId, setSourceFileId] = useState<string | null>(null);
 
   // All tool calls across all messages (for the timeline)
   const allToolCalls = useMemo(
@@ -33,14 +34,34 @@ export function ChatView({ initialSessionId }: ChatViewProps) {
       ? (effectiveJob.output?.output_file as string | undefined) ?? null
       : null;
 
-  // Manually set file (via "Load in Player" button) overrides auto-selection
-  const displayFileId = playerFileId ?? autoFileId;
+  // Priority: manual "Load in Player" > active job output > uploaded source
+  const displayFileId = playerFileId ?? autoFileId ?? sourceFileId;
+
+  const isOriginalActive = displayFileId === sourceFileId && displayFileId !== null;
+
+  const playerLabel = playerFileId
+    ? 'Custom'
+    : autoFileId && displayFileId === autoFileId
+      ? 'Edited'
+      : sourceFileId && isOriginalActive
+        ? 'Original'
+        : undefined;
+
+  function handleOriginalSelect() {
+    setPlayerFileId(sourceFileId);
+    setActiveJobId(null);
+  }
+
+  function handleStepSelect(jobId: string) {
+    setActiveJobId(jobId);
+    setPlayerFileId(null);
+  }
 
   return (
     <div className="flex h-full flex-col">
       {/* Video Player — 40% height */}
       <div className="h-[40%] min-h-[200px] shrink-0 bg-black">
-        <VideoPlayer fileId={displayFileId} />
+        <VideoPlayer fileId={displayFileId} label={playerLabel} />
       </div>
 
       {/* Edit Timeline — fixed 72px */}
@@ -48,7 +69,10 @@ export function ChatView({ initialSessionId }: ChatViewProps) {
         <EditTimeline
           steps={allToolCalls}
           activeJobId={activeJobId}
-          onStepSelect={setActiveJobId}
+          onStepSelect={handleStepSelect}
+          sourceFileId={sourceFileId}
+          isOriginalActive={isOriginalActive}
+          onOriginalSelect={handleOriginalSelect}
         />
       </div>
 
@@ -59,7 +83,11 @@ export function ChatView({ initialSessionId }: ChatViewProps) {
       />
 
       {/* Chat Input */}
-      <ChatInput onSend={sendMessage} isStreaming={isStreaming} />
+      <ChatInput
+        onSend={sendMessage}
+        isStreaming={isStreaming}
+        onFileUploaded={setSourceFileId}
+      />
     </div>
   );
 }

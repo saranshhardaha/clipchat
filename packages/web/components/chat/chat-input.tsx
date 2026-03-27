@@ -1,44 +1,82 @@
 'use client';
 
-import { useState, useRef, type KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import { Send, Paperclip, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { uploadFile } from '@/lib/engine-client';
+import { Progress } from '@/components/ui/progress';
+import type { FileRecord } from '@/lib/engine-client';
 
 interface ChatInputProps {
   onSend: (text: string, fileId?: string) => Promise<void>;
   isStreaming: boolean;
+  onFileUploaded?: (fileId: string) => void;
 }
 
-export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
+export function ChatInput({ onSend, isStreaming, onFileUploaded }: ChatInputProps) {
   const [text, setText] = useState('');
   const [pendingFileId, setPendingFileId] = useState<string | null>(null);
   const [pendingFileName, setPendingFileName] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  // Listen for "Use" clicks from the files library panel
+  useEffect(() => {
+    function onSelectFile(e: Event) {
+      const { fileId, fileName } = (e as CustomEvent<{ fileId: string; fileName: string }>).detail;
+      setPendingFileId(fileId);
+      setPendingFileName(fileName);
+    }
+    window.addEventListener('clipchat:select-file', onSelectFile);
+    return () => window.removeEventListener('clipchat:select-file', onSelectFile);
+  }, []);
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadError(null);
-
     setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const record = await uploadFile(formData);
-      setPendingFileId(record.id);
-      setPendingFileName(file.name);
-    } catch (err) {
-      console.error('Upload failed:', err);
-      setUploadError('Upload failed — please try again');
-    } finally {
+    setUploadProgress(0);
+
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) {
+        setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      setUploadProgress(null);
       setIsUploading(false);
-      // Reset input so same file can be re-selected
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const record = JSON.parse(xhr.responseText) as FileRecord;
+          setPendingFileId(record.id);
+          setPendingFileName(file.name);
+          onFileUploaded?.(record.id);
+        } catch {
+          setUploadError('Upload failed — invalid response');
+        }
+      } else {
+        setUploadError('Upload failed — please try again');
+      }
       if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+    };
+
+    xhr.onerror = () => {
+      setUploadProgress(null);
+      setIsUploading(false);
+      setUploadError('Upload failed — please try again');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    xhr.open('POST', '/api/files/upload');
+    xhr.send(formData);
   }
 
   async function handleSend() {
@@ -72,6 +110,13 @@ export function ChatInput({ onSend, isStreaming }: ChatInputProps) {
           >
             <X className="h-3 w-3" />
           </button>
+        </div>
+      )}
+
+      {uploadProgress !== null && (
+        <div className="space-y-1">
+          <Progress value={uploadProgress} className="h-1.5" />
+          <p className="text-xs text-muted-foreground px-1">Uploading… {uploadProgress}%</p>
         </div>
       )}
 

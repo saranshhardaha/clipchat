@@ -22,11 +22,13 @@ services:
   engine:
     build: .
     ports: ["3000:3000"]
+    command: sh -c "node packages/engine/dist/db/migrate.js && node packages/engine/dist/index.js"
     environment:
       DATABASE_URL: postgres://postgres:clipchat@postgres:5432/clipchat
       REDIS_URL: redis://redis:6379
       STORAGE_DRIVER: local
       UPLOAD_DIR: /data/uploads
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     volumes: [uploads:/data/uploads]
     depends_on:
       postgres: {condition: service_healthy}
