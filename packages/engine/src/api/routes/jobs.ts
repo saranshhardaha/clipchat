@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import fs, { createReadStream } from 'fs';
+import path from 'path';
 import { db } from '../../db/index.js';
 import { jobs } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -11,7 +13,7 @@ import {
   AddTextOverlayInputSchema, ResizeVideoInputSchema, ExtractAudioInputSchema,
   ReplaceAudioInputSchema, ChangeSpeedInputSchema, ExportVideoInputSchema,
   GetVideoInfoInputSchema, CropVideoInputSchema, RotateFlipInputSchema,
-  ColorAdjustInputSchema,
+  ColorAdjustInputSchema, CompressVideoInputSchema,
 } from '../../types/tools.js';
 
 const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; error?: { issues: { message: string }[] }; data?: unknown } }> = {
@@ -28,6 +30,7 @@ const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; 
   change_speed:      ChangeSpeedInputSchema,
   export_video:      ExportVideoInputSchema,
   get_video_info:    GetVideoInfoInputSchema,
+  compress_video:    CompressVideoInputSchema,
 };
 
 const router = Router();
@@ -119,6 +122,56 @@ router.get('/jobs/:id/stream', async (req, res, next) => {
     // Send initial state so client has current progress
     send(job);
 
+  } catch (err) { next(err); }
+});
+
+// Serve the output file produced by a completed job (temp path stored in job.output)
+router.get('/jobs/:id/output-content', async (req, res, next) => {
+  try {
+    const [job] = await db.select().from(jobs).where(eq(jobs.id, req.params.id));
+    if (!job) throw new AppError(404, 'Job not found');
+    if (job.status !== 'completed') throw new AppError(400, 'Job not completed');
+
+    const outputPath = typeof job.output === 'string' ? job.output : null;
+    if (!outputPath) throw new AppError(400, 'Job has no file output');
+
+    const stat = await fs.promises.stat(outputPath);
+    const fileSize = stat.size;
+    const ext = path.extname(outputPath).slice(1).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+      gif: 'image/gif', mp3: 'audio/mpeg', aac: 'audio/aac', wav: 'audio/wav',
+    };
+    const contentType = mimeTypes[ext] ?? 'application/octet-stream';
+    const range = req.headers.range;
+
+    if (range) {
+      const match = range.match(/^bytes=(\d+)-(\d*)$/);
+      if (!match) {
+        res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
+        return res.end();
+      }
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+      if (start > end || start >= fileSize || end >= fileSize) {
+        res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
+        return res.end();
+      }
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': end - start + 1,
+        'Content-Type': contentType,
+      });
+      createReadStream(outputPath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+      });
+      createReadStream(outputPath).pipe(res);
+    }
   } catch (err) { next(err); }
 });
 

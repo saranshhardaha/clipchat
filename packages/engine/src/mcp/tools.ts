@@ -1,5 +1,6 @@
 import { getVideoInfo } from '../ffmpeg/info.js';
 import { trimVideo } from '../ffmpeg/trim.js';
+import { compressVideo } from '../ffmpeg/compress.js';
 import { mergeClips } from '../ffmpeg/merge.js';
 import { resizeVideo } from '../ffmpeg/resize.js';
 import { extractAudio, replaceAudio } from '../ffmpeg/audio.js';
@@ -24,4 +25,5 @@ export const MCP_TOOLS = [
   { name: 'add_subtitles', description: 'Add subtitle track', schema: Schemas.AddSubtitlesInputSchema, handler: (i: any) => addSubtitles(i).then(p => ({ output_file: p })) },
   { name: 'change_speed', description: 'Change video playback speed', schema: Schemas.ChangeSpeedInputSchema, handler: (i: any) => changeSpeed(i).then(p => ({ output_file: p })) },
   { name: 'export_video', description: 'Re-encode and export video', schema: Schemas.ExportVideoInputSchema, handler: (i: any) => exportVideo(i).then(p => ({ output_file: p })) },
+  { name: 'compress_video', description: 'Compress video with preset (web/mobile/whatsapp/telegram/archive) or target_size_mb for exact file size', schema: Schemas.CompressVideoInputSchema, handler: (i: any) => compressVideo(i).then(p => ({ output_file: p })) },
 ];
