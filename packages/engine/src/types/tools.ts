@@ -121,6 +121,61 @@ export const ColorAdjustInputSchema = z.object({
   hue: z.number().min(-180).max(180).optional(),
 });
 
+export const CompressVideoInputSchema = z.object({
+  input_file: z.string(),
+  preset: z.enum(['web', 'mobile', 'whatsapp', 'telegram', 'archive']),
+  target_size_mb: z.number().positive().optional(),
+});
+
+export const GenerateThumbnailInputSchema = z.object({
+  input_file: z.string(),
+  timestamp: z.string(),
+  format: z.enum(['jpg', 'png', 'webp']).default('jpg'),
+  width: z.number().int().positive().optional(),
+});
+
+export const NormalizeAudioInputSchema = z.object({
+  input_file: z.string(),
+  target_lufs: z.number().min(-24).max(-5).default(-14),
+  true_peak: z.number().min(-9).max(0).default(-1),
+});
+
+export const FadeAudioInputSchema = z.object({
+  input_file: z.string(),
+  fade_in_duration: z.number().min(0).default(0),
+  fade_out_duration: z.number().min(0).default(0),
+});
+
+export const AddWatermarkInputSchema = z.object({
+  input_file: z.string(),
+  watermark_file: z.string(),
+  position: z.enum(['top_left', 'top_right', 'bottom_left', 'bottom_right', 'center']).default('bottom_right'),
+  opacity: z.number().min(0).max(1).default(1),
+  scale: z.number().min(0.01).max(1).default(0.15),
+  margin: z.number().int().min(0).default(10),
+});
+
+export const CreateGifInputSchema = z.object({
+  input_file: z.string(),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
+  fps: z.number().min(1).max(30).default(10),
+  width: z.number().int().positive().default(480),
+  optimize: z.boolean().default(true),
+});
+
+export const BlurRegionInputSchema = z.object({
+  input_file: z.string(),
+  preset: z.enum(['face_top_center', 'lower_third', 'full_frame']).optional(),
+  x: z.number().int().min(0).optional(),
+  y: z.number().int().min(0).optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  blur_strength: z.number().min(1).max(20).default(10),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
+});
+
 export type TrimVideoInput = z.infer<typeof TrimVideoInputSchema>;
 export type MergeClipsInput = z.infer<typeof MergeClipsInputSchema>;
 export type AddSubtitlesInput = z.infer<typeof AddSubtitlesInputSchema>;
@@ -135,3 +190,10 @@ export type GetVideoInfoOutput = z.infer<typeof GetVideoInfoOutputSchema>;
 export type CropVideoInput = z.infer<typeof CropVideoInputSchema>;
 export type RotateFlipInput = z.infer<typeof RotateFlipInputSchema>;
 export type ColorAdjustInput = z.infer<typeof ColorAdjustInputSchema>;
+export type CompressVideoInput = z.infer<typeof CompressVideoInputSchema>;
+export type GenerateThumbnailInput = z.infer<typeof GenerateThumbnailInputSchema>;
+export type NormalizeAudioInput = z.infer<typeof NormalizeAudioInputSchema>;
+export type FadeAudioInput = z.infer<typeof FadeAudioInputSchema>;
+export type AddWatermarkInput = z.infer<typeof AddWatermarkInputSchema>;
+export type CreateGifInput = z.infer<typeof CreateGifInputSchema>;
+export type BlurRegionInput = z.infer<typeof BlurRegionInputSchema>;

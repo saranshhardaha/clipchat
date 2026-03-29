@@ -1,6 +1,6 @@
 import ffmpeg from 'fluent-ffmpeg';
 import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup } from './executor.js';
-import type { ExtractAudioInput, ReplaceAudioInput } from '../types/tools.js';
+import type { ExtractAudioInput, ReplaceAudioInput, NormalizeAudioInput, FadeAudioInput } from '../types/tools.js';
 
 const AUDIO_QUALITY = { low: '128k', medium: '192k', high: '320k' };
 
@@ -30,4 +30,16 @@ export async function replaceAudio(input: ReplaceAudioInput, onProgress?: (p: nu
   cmd = cmd.output(output);
   await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
+}
+
+export async function normalizeAudio(input: NormalizeAudioInput, onProgress?: (p: number) => void): Promise<string> {
+  const output = tempOutputPath('mp4');
+  // TODO: Implement normalize_audio
+  throw new Error('normalize_audio not yet implemented');
+}
+
+export async function fadeAudio(input: FadeAudioInput, onProgress?: (p: number) => void): Promise<string> {
+  const output = tempOutputPath('mp4');
+  // TODO: Implement fade_audio
+  throw new Error('fade_audio not yet implemented');
 }
