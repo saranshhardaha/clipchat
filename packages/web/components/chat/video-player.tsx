@@ -4,22 +4,33 @@ import { useRef, useEffect, useState } from 'react';
 import { Video, AlertTriangle } from 'lucide-react';
 
 interface VideoPlayerProps {
-  fileId: string | null;
+  src: string | null;
   label?: string;
 }
 
-export function VideoPlayer({ fileId, label }: VideoPlayerProps) {
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+
+function isImageSrc(src: string): boolean {
+  const lower = src.toLowerCase();
+  return IMAGE_EXTENSIONS.some(ext => lower.endsWith(ext));
+}
+
+export function VideoPlayer({ src, label }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    if (videoRef.current) {
+    if (src && isImageSrc(src)) {
+      // For images, just clear the error state
+      setLoadError(false);
+    } else if (videoRef.current) {
       setLoadError(false);
       videoRef.current.load();
     }
-  }, [fileId]);
+  }, [src]);
 
-  if (!fileId) {
+  if (!src) {
     return (
       <div className="flex h-full items-center justify-center bg-black/50 text-muted-foreground">
         <div className="text-center space-y-2">
@@ -41,11 +52,30 @@ export function VideoPlayer({ fileId, label }: VideoPlayerProps) {
     );
   }
 
+  if (isImageSrc(src)) {
+    return (
+      <div className="relative h-full w-full">
+        <img
+          ref={imgRef}
+          src={src}
+          alt="Generated thumbnail"
+          className="h-full w-full object-contain bg-black"
+          onError={() => setLoadError(true)}
+        />
+        {label && (
+          <div className="absolute top-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white pointer-events-none">
+            {label}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="relative h-full w-full">
       <video
         ref={videoRef}
-        src={`/api/files/${fileId}/content`}
+        src={src}
         controls
         className="h-full w-full object-contain bg-black"
         onError={() => setLoadError(true)}
