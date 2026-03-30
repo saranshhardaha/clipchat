@@ -21,6 +21,13 @@ const TOOL_LABELS: Record<string, string> = {
   change_speed: 'Change Speed',
   export_video: 'Export Video',
   get_video_info: 'Get Video Info',
+  compress_video: 'Compress Video',
+  generate_thumbnail: 'Generate Thumbnail',
+  normalize_audio: 'Normalize Audio',
+  fade_audio: 'Fade Audio',
+  add_watermark: 'Add Watermark',
+  create_gif: 'Create GIF',
+  blur_region: 'Blur Region',
 };
 
 function formatInputSummary(tool: string, input: Record<string, unknown>): string | null {
@@ -60,6 +67,41 @@ function formatInputSummary(tool: string, input: Record<string, unknown>): strin
       return [input.format, input.quality].filter(Boolean).join(' · ') || null;
     case 'replace_audio':
       return input.mix ? 'mix mode' : 'replace mode';
+    case 'compress_video': {
+      const parts = [`preset: ${input.preset as string}`];
+      if (input.target_size_mb) parts.push(`${input.target_size_mb}MB target`);
+      return parts.join(', ');
+    }
+    case 'generate_thumbnail': {
+      const parts = [`at ${input.timestamp as string}`];
+      if (input.format && input.format !== 'jpg') parts.push(input.format as string);
+      if (input.width) parts.push(`${input.width}px wide`);
+      return parts.join(', ');
+    }
+    case 'normalize_audio': {
+      const lufs = input.target_lufs ?? -14;
+      return `${lufs} LUFS`;
+    }
+    case 'fade_audio': {
+      const parts: string[] = [];
+      if ((input.fade_in_duration as number) > 0) parts.push(`in ${input.fade_in_duration}s`);
+      if ((input.fade_out_duration as number) > 0) parts.push(`out ${input.fade_out_duration}s`);
+      return parts.length ? parts.join(', ') : 'no fades';
+    }
+    case 'add_watermark': {
+      const pos = (input.position as string) ?? 'bottom_right';
+      return `${pos}, scale ${input.scale ?? 0.15}`;
+    }
+    case 'create_gif': {
+      const parts = [`${(input.fps as number) ?? 10}fps`, `${(input.width as number) ?? 480}px`];
+      if (input.start_time && input.end_time) parts.push(`${input.start_time}–${input.end_time}`);
+      return parts.join(', ');
+    }
+    case 'blur_region': {
+      if (input.preset) return `preset: ${input.preset as string}`;
+      if (input.x !== undefined) return `manual region`;
+      return 'full frame';
+    }
     default:
       return null;
   }
@@ -67,7 +109,7 @@ function formatInputSummary(tool: string, input: Record<string, unknown>): strin
 
 interface ToolCallCardProps {
   toolCall: ToolCallCardType;
-  onLoadInPlayer: (fileId: string) => void;
+  onLoadInPlayer: (src: string) => void;
 }
 
 export function ToolCallCard({ toolCall, onLoadInPlayer }: ToolCallCardProps) {
@@ -75,7 +117,9 @@ export function ToolCallCard({ toolCall, onLoadInPlayer }: ToolCallCardProps) {
   const label = TOOL_LABELS[toolCall.tool] ?? toolCall.tool;
   const status = job?.status ?? 'queued';
   const progress = job?.progress ?? 0;
-  const outputFileId = job?.output?.output_file as string | undefined;
+  const outputSrc = job?.status === 'completed' && typeof job.output === 'string' && toolCall.job_id
+    ? `/api/jobs/${toolCall.job_id}/output-content`
+    : undefined;
   const inputSummary = formatInputSummary(toolCall.tool, toolCall.input);
 
   return (
@@ -117,18 +161,18 @@ export function ToolCallCard({ toolCall, onLoadInPlayer }: ToolCallCardProps) {
         </div>
       )}
 
-      {status === 'completed' && outputFileId && (
+      {outputSrc && (
         <div className="flex items-center gap-2">
           <Button
             size="sm"
             variant="outline"
             className="h-7 text-xs"
-            onClick={() => onLoadInPlayer(outputFileId)}
+            onClick={() => onLoadInPlayer(outputSrc)}
           >
             Load in Player
           </Button>
           <a
-            href={`/api/files/${outputFileId}/content`}
+            href={outputSrc}
             download
             className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
