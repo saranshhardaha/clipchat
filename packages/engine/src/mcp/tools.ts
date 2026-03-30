@@ -11,6 +11,7 @@ import { cropVideo, rotateFlip, colorAdjust } from '../ffmpeg/adjust.js';
 import { generateThumbnail } from '../ffmpeg/thumbnail.js';
 import { addWatermark } from '../ffmpeg/watermark.js';
 import { createGif } from '../ffmpeg/gif.js';
+import { blurRegion } from '../ffmpeg/blur.js';
 import * as Schemas from '../types/tools.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,4 +35,5 @@ export const MCP_TOOLS = [
   { name: 'fade_audio', description: 'Apply fade in and/or fade out to audio', schema: Schemas.FadeAudioInputSchema, handler: (i: any) => fadeAudio(i).then(p => ({ output_file: p })) },
   { name: 'add_watermark', description: 'Overlay a watermark image onto a video', schema: Schemas.AddWatermarkInputSchema, handler: (i: any) => addWatermark(i).then(p => ({ output_file: p })) },
   { name: 'create_gif', description: 'Convert a video (or segment) to an animated GIF', schema: Schemas.CreateGifInputSchema, handler: (i: any) => createGif(i).then(p => ({ output_file: p })) },
+  { name: 'blur_region', description: 'Blur a region of a video (supports presets: face_top_center, lower_third, full_frame)', schema: Schemas.BlurRegionInputSchema, handler: (i: any) => blurRegion(i).then(p => ({ output_file: p })) },
 ];

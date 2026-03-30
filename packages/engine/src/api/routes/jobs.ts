@@ -16,6 +16,7 @@ import {
   ColorAdjustInputSchema, CompressVideoInputSchema, GenerateThumbnailInputSchema,
   NormalizeAudioInputSchema, FadeAudioInputSchema, AddWatermarkInputSchema,
   CreateGifInputSchema,
+  BlurRegionInputSchema,
 } from '../../types/tools.js';
 
 const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; error?: { issues: { message: string }[] }; data?: unknown } }> = {
@@ -38,6 +39,7 @@ const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; 
   fade_audio:           FadeAudioInputSchema,
   add_watermark:        AddWatermarkInputSchema,
   create_gif:           CreateGifInputSchema,
+  blur_region:          BlurRegionInputSchema,
 };
 
 const router = Router();
