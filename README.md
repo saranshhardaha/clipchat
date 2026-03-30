@@ -8,7 +8,7 @@
 
 ## What is it?
 
-ClipChat Engine is a self-hostable backend that exposes 10 FFmpeg operations as:
+ClipChat Engine is a self-hostable backend that exposes 20 FFmpeg operations as:
 
 - **REST API** — async job queue (BullMQ) with SSE progress streaming
 - **MCP Server** — Model Context Protocol server for AI agent integration (Claude, etc.)
@@ -21,12 +21,12 @@ It handles the FFmpeg heavy-lifting so you can focus on building interfaces — 
 
 | Feature | Detail |
 |---------|--------|
-| 10 FFmpeg tools | trim, merge, resize, extract audio, replace audio, add text, add subtitles, change speed, export, get info |
+| 20 FFmpeg tools | trim, merge, resize, crop, rotate/flip, color adjust, compress, thumbnail, normalize audio, fade audio, watermark, GIF, blur region, and more |
 | Async job queue | BullMQ + Redis; jobs survive server restarts; 3 retries with exponential backoff |
 | SSE streaming | Real-time progress updates via Server-Sent Events |
 | AI chat | OpenRouter streaming with tool calling; `/chat` endpoint → NL → FFmpeg jobs |
 | Session history | Chat sessions and messages persisted to PostgreSQL |
-| MCP server | All 10 tools accessible to AI agents via stdio |
+| MCP server | All 20 tools accessible to AI agents via stdio |
 | Local + S3 storage | Pluggable storage adapter; DB-backed path lookup survives restarts |
 | API key auth | SHA-256 hashed keys in PostgreSQL |
 | Web UI | Self-hosted Next.js UI on :3001 — chat, video player, edit timeline |
@@ -104,7 +104,7 @@ HTTP Client / AI Agent / Web UI (:3001)
 
   ─────────────────────────────
   MCP Server (stdio, --mcp flag)
-  └── 10 tools → FFmpeg direct (synchronous)
+  └── 20 tools → FFmpeg direct (synchronous)
 
   ─────────────────────────────
   Web UI (packages/web, :3001)
@@ -159,6 +159,16 @@ Full endpoint docs: [API Reference →](docs/api-reference.md)
 | `add_subtitles` | Burn SRT subtitles (or add as soft track) |
 | `change_speed` | Speed up or slow down (0.25×–4×) |
 | `export_video` | Re-encode to mp4/webm/mov/gif with quality control |
+| `crop_video` | Crop to a region or preset (square_center, portrait_center, landscape_center) |
+| `rotate_flip` | Rotate 90/180/270° or flip horizontally/vertically |
+| `color_adjust` | Adjust brightness, contrast, saturation, gamma, hue |
+| `compress_video` | Reduce file size with presets (web, mobile, whatsapp, telegram, archive) |
+| `generate_thumbnail` | Extract a frame as JPG/PNG/WebP at any timestamp |
+| `normalize_audio` | Loudness normalisation to target LUFS (default –14 for streaming) |
+| `fade_audio` | Add audio fade-in and/or fade-out |
+| `add_watermark` | Overlay a logo/image with opacity, scale, and position control |
+| `create_gif` | Create animated GIF from a segment (two-pass, palette-optimised) |
+| `blur_region` | Blur a rectangle (preset or manual coords) with optional time range |
 
 Full tool docs with schemas and examples: [Tools Reference →](docs/tools-reference.md)
 
@@ -221,7 +231,7 @@ Claude Desktop config:
 
 - [Getting Started](docs/getting-started.md) — local dev setup, running tests
 - [API Reference](docs/api-reference.md) — all endpoints with schemas and examples
-- [Tools Reference](docs/tools-reference.md) — all 10 FFmpeg tools documented
+- [Tools Reference](docs/tools-reference.md) — all 20 FFmpeg tools documented
 - [MCP Integration](docs/mcp-integration.md) — AI agent setup (Claude Desktop, Claude Code)
 - [Deployment](docs/deployment.md) — Docker Compose, S3, production hardening
 - [Contributing](CONTRIBUTING.md) — development workflow, adding new tools

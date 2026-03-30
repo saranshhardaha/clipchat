@@ -1,6 +1,6 @@
 # Tools Reference
 
-ClipChat exposes 13 FFmpeg operations as tools. Each tool accepts a JSON input object and returns either structured data or the path to an output file.
+ClipChat exposes 20 FFmpeg operations as tools. Each tool accepts a JSON input object and returns either structured data or the path to an output file.
 
 **Usage:** Submit via `POST /api/v1/jobs` with `{ "tool": "<name>", "input": { ... } }`, or via `POST /api/v1/tools/<name>` with just the input object.
 
@@ -626,5 +626,320 @@ At least one field should be set. Only specified fields are applied.
   "hue": 15,
   "saturation": 1.2,
   "contrast": 1.1
+}
+```
+
+---
+
+## 14. `compress_video`
+
+Reduce file size using named quality presets. Distinct from `export_video` in that it targets file-size reduction with user-friendly preset names and handles audio compression.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "preset": "mobile",
+  "target_size_mb": 25
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `preset` | string | Yes | — | Compression preset (see below) |
+| `target_size_mb` | number | No | — | Override CRF with 2-pass bitrate targeting (minimum 100 kbps) |
+
+**Presets:**
+
+| Preset | Codec | CRF | Max height | Audio |
+|--------|-------|-----|------------|-------|
+| `web` | H.264 | 23 | none | AAC 128k |
+| `mobile` | H.264 | 28 | 720p | AAC 96k |
+| `whatsapp` | H.264 | 30 | 720p | AAC 128k |
+| `telegram` | H.264 | 26 | none | AAC 128k |
+| `archive` | H.265 | 28 | none | AAC 128k |
+
+**Output (job.output):** Path to compressed `.mp4` file (string).
+
+**Example — compress for mobile:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "preset": "mobile"
+}
+```
+
+**Example — target 15MB for WhatsApp:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "preset": "whatsapp",
+  "target_size_mb": 15
+}
+```
+
+---
+
+## 15. `generate_thumbnail`
+
+Extract a single frame from a video as a still image.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "timestamp": "5",
+  "format": "jpg",
+  "width": 640
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `timestamp` | string | Yes | — | Frame position in seconds or `HH:MM:SS` format |
+| `format` | string | No | `"jpg"` | Output format: `"jpg"`, `"png"`, `"webp"` |
+| `width` | integer | No | — | Scale output to this width (preserves aspect ratio) |
+
+**Output (job.output):** Path to image file (`.jpg`, `.png`, or `.webp`).
+
+**Note:** The web UI automatically renders the result as an `<img>` instead of the video player when the output is an image file.
+
+**Example — extract a JPG thumbnail at 5 seconds:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "timestamp": "5"
+}
+```
+
+**Example — extract a 480px-wide WebP:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "timestamp": "00:01:30",
+  "format": "webp",
+  "width": 480
+}
+```
+
+---
+
+## 16. `normalize_audio`
+
+Normalize loudness to a target LUFS value using FFmpeg's `loudnorm` filter (EBU R128). Video stream is copied without re-encoding.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "target_lufs": -14,
+  "true_peak": -1
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video (must have an audio stream) |
+| `target_lufs` | number | No | `-14` | Target integrated loudness in LUFS (–24 to –5). –14 = YouTube/Spotify standard |
+| `true_peak` | number | No | `-1` | True peak ceiling in dBTP (–9 to 0) |
+
+**Output (job.output):** Path to normalized `.mp4` file (string).
+
+**Error:** If the input has no audio stream, the job fails with "no audio stream found".
+
+**Example — normalize for YouTube:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "target_lufs": -14
+}
+```
+
+**Example — normalize for broadcast (–23 LUFS):**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "target_lufs": -23,
+  "true_peak": -2
+}
+```
+
+---
+
+## 17. `fade_audio`
+
+Add an audio fade-in, fade-out, or both. Video stream is copied without re-encoding.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "fade_in_duration": 1.0,
+  "fade_out_duration": 2.0
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `fade_in_duration` | number | No | `0` | Fade-in duration in seconds (0 = no fade) |
+| `fade_out_duration` | number | No | `0` | Fade-out duration in seconds (0 = no fade) |
+
+At least one of `fade_in_duration` or `fade_out_duration` should be greater than 0.
+
+If the sum of both durations exceeds the video length, each is capped to `duration / 2`.
+
+**Output (job.output):** Path to output `.mp4` file (string).
+
+**Example — 1s fade in and 2s fade out:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "fade_in_duration": 1.0,
+  "fade_out_duration": 2.0
+}
+```
+
+---
+
+## 18. `add_watermark`
+
+Overlay a logo or image onto a video at a specified position.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "watermark_file": "/path/to/logo.png",
+  "position": "bottom_right",
+  "opacity": 0.8,
+  "scale": 0.15,
+  "margin": 10
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `watermark_file` | string | Yes | — | Watermark image (PNG with transparency recommended) |
+| `position` | string | No | `"bottom_right"` | Position: `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"`, `"center"` |
+| `opacity` | number | No | `1` | Watermark opacity (0–1) |
+| `scale` | number | No | `0.15` | Watermark width as fraction of video width (0.01–1) |
+| `margin` | integer | No | `10` | Margin from edge in pixels |
+
+**Output (job.output):** Path to watermarked `.mp4` file (string).
+
+**Example — semi-transparent logo at bottom-right:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "watermark_file": "/uploads/logo.png",
+  "position": "bottom_right",
+  "opacity": 0.7
+}
+```
+
+---
+
+## 19. `create_gif`
+
+Create an animated GIF from a video or segment using two-pass palette generation for optimal quality.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "start_time": "5",
+  "end_time": "10",
+  "fps": 10,
+  "width": 480,
+  "optimize": true
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `start_time` | string | No | — | Start of segment (seconds or `HH:MM:SS`) |
+| `end_time` | string | No | — | End of segment (seconds or `HH:MM:SS`) |
+| `fps` | number | No | `10` | GIF frame rate (1–30) |
+| `width` | integer | No | `480` | Output width in pixels (height auto-calculated) |
+| `optimize` | boolean | No | `true` | Use Bayer dithering for smaller file size |
+
+**Output (job.output):** Path to `.gif` file (string).
+
+**Example — 5-second clip as GIF:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "start_time": "10",
+  "end_time": "15",
+  "fps": 12,
+  "width": 480
+}
+```
+
+---
+
+## 20. `blur_region`
+
+Blur a rectangular region of the video. Supports named zone presets and optional time-range gating.
+
+**Input:**
+```json
+{
+  "input_file": "/path/to/video.mp4",
+  "preset": "lower_third",
+  "blur_strength": 15,
+  "start_time": "5",
+  "end_time": "20"
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `input_file` | string | Yes | — | Source video |
+| `preset` | string | No | — | Zone preset (see below) — takes priority over manual coords |
+| `x` | integer | No | — | Blur region left edge in pixels (manual override) |
+| `y` | integer | No | — | Blur region top edge in pixels (manual override) |
+| `width` | integer | No | — | Blur region width in pixels (manual override) |
+| `height` | integer | No | — | Blur region height in pixels (manual override) |
+| `blur_strength` | number | No | `10` | Blur radius (1–20) |
+| `start_time` | string | No | — | Only blur after this time (seconds or `HH:MM:SS`) |
+| `end_time` | string | No | — | Only blur before this time (seconds or `HH:MM:SS`) |
+
+**Presets** (region computed from video dimensions):
+
+| Preset | Region |
+|--------|--------|
+| `face_top_center` | Top-center 50% width, 40% height — covers common face position |
+| `lower_third` | Bottom 33% of frame — covers on-screen text/captions |
+| `full_frame` | Entire frame (default when no preset or coords given) |
+
+If neither preset nor manual `x/y/width/height` are provided, defaults to `full_frame`.
+
+**Output (job.output):** Path to output `.mp4` file (string).
+
+**Example — blur lower-third text for 5 seconds:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "preset": "lower_third",
+  "start_time": "10",
+  "end_time": "15"
+}
+```
+
+**Example — blur a custom region:**
+```json
+{
+  "input_file": "/uploads/video.mp4",
+  "x": 100,
+  "y": 50,
+  "width": 200,
+  "height": 150,
+  "blur_strength": 20
 }
 ```

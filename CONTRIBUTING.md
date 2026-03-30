@@ -13,7 +13,7 @@ clipchat/
 │       ├── src/
 │       │   ├── types/          # Zod schemas + TypeScript types
 │       │   ├── storage/        # StorageAdapter interface + local/S3 impls
-│       │   ├── ffmpeg/         # One file per tool (executor + 10 tools)
+│       │   ├── ffmpeg/         # One file per tool (executor + 20 tools)
 │       │   ├── queue/          # BullMQ queue setup + worker
 │       │   ├── db/             # Drizzle schema + migrations
 │       │   ├── api/            # Express app, routes, middleware
