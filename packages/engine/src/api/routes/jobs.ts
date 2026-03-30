@@ -13,7 +13,7 @@ import {
   AddTextOverlayInputSchema, ResizeVideoInputSchema, ExtractAudioInputSchema,
   ReplaceAudioInputSchema, ChangeSpeedInputSchema, ExportVideoInputSchema,
   GetVideoInfoInputSchema, CropVideoInputSchema, RotateFlipInputSchema,
-  ColorAdjustInputSchema, CompressVideoInputSchema,
+  ColorAdjustInputSchema, CompressVideoInputSchema, GenerateThumbnailInputSchema,
 } from '../../types/tools.js';
 
 const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; error?: { issues: { message: string }[] }; data?: unknown } }> = {
@@ -30,7 +30,8 @@ const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; 
   change_speed:      ChangeSpeedInputSchema,
   export_video:      ExportVideoInputSchema,
   get_video_info:    GetVideoInfoInputSchema,
-  compress_video:    CompressVideoInputSchema,
+  compress_video:       CompressVideoInputSchema,
+  generate_thumbnail:   GenerateThumbnailInputSchema,
 };
 
 const router = Router();
@@ -141,6 +142,7 @@ router.get('/jobs/:id/output-content', async (req, res, next) => {
     const mimeTypes: Record<string, string> = {
       mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
       gif: 'image/gif', mp3: 'audio/mpeg', aac: 'audio/aac', wav: 'audio/wav',
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
     };
     const contentType = mimeTypes[ext] ?? 'application/octet-stream';
     const range = req.headers.range;

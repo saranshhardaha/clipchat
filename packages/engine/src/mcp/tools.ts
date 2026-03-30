@@ -8,6 +8,7 @@ import { addTextOverlay, addSubtitles } from '../ffmpeg/text.js';
 import { changeSpeed } from '../ffmpeg/speed.js';
 import { exportVideo } from '../ffmpeg/export.js';
 import { cropVideo, rotateFlip, colorAdjust } from '../ffmpeg/adjust.js';
+import { generateThumbnail } from '../ffmpeg/thumbnail.js';
 import * as Schemas from '../types/tools.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,4 +27,5 @@ export const MCP_TOOLS = [
   { name: 'change_speed', description: 'Change video playback speed', schema: Schemas.ChangeSpeedInputSchema, handler: (i: any) => changeSpeed(i).then(p => ({ output_file: p })) },
   { name: 'export_video', description: 'Re-encode and export video', schema: Schemas.ExportVideoInputSchema, handler: (i: any) => exportVideo(i).then(p => ({ output_file: p })) },
   { name: 'compress_video', description: 'Compress video with preset (web/mobile/whatsapp/telegram/archive) or target_size_mb for exact file size', schema: Schemas.CompressVideoInputSchema, handler: (i: any) => compressVideo(i).then(p => ({ output_file: p })) },
+  { name: 'generate_thumbnail', description: 'Extract a thumbnail image frame from a video at a given timestamp', schema: Schemas.GenerateThumbnailInputSchema, handler: (i: any) => generateThumbnail(i).then(p => ({ output_file: p })) },
 ];
