@@ -51,7 +51,10 @@ export async function normalizeAudio(input: NormalizeAudioInput, onProgress?: (p
 
 export async function fadeAudio(input: FadeAudioInput, onProgress?: (p: number) => void): Promise<string> {
   const probe = await ffprobePromise(input.input_file);
-  const duration = probe.format.duration ?? 0;
+  const hasAudio = probe.streams.some(s => s.codec_type === 'audio');
+  if (!hasAudio) throw new AppError(400, 'no audio stream found');
+
+  const duration = Number(probe.format.duration ?? 0);
 
   let fadeIn = input.fade_in_duration ?? 0;
   let fadeOut = input.fade_out_duration ?? 0;
