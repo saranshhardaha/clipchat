@@ -10,6 +10,7 @@ import { exportVideo } from '../ffmpeg/export.js';
 import { cropVideo, rotateFlip, colorAdjust } from '../ffmpeg/adjust.js';
 import { generateThumbnail } from '../ffmpeg/thumbnail.js';
 import { addWatermark } from '../ffmpeg/watermark.js';
+import { createGif } from '../ffmpeg/gif.js';
 import * as Schemas from '../types/tools.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,4 +33,5 @@ export const MCP_TOOLS = [
   { name: 'normalize_audio', description: 'Normalize audio loudness to a target LUFS level', schema: Schemas.NormalizeAudioInputSchema, handler: (i: any) => normalizeAudio(i).then(p => ({ output_file: p })) },
   { name: 'fade_audio', description: 'Apply fade in and/or fade out to audio', schema: Schemas.FadeAudioInputSchema, handler: (i: any) => fadeAudio(i).then(p => ({ output_file: p })) },
   { name: 'add_watermark', description: 'Overlay a watermark image onto a video', schema: Schemas.AddWatermarkInputSchema, handler: (i: any) => addWatermark(i).then(p => ({ output_file: p })) },
+  { name: 'create_gif', description: 'Convert a video (or segment) to an animated GIF', schema: Schemas.CreateGifInputSchema, handler: (i: any) => createGif(i).then(p => ({ output_file: p })) },
 ];
