@@ -14,6 +14,7 @@ import {
   ReplaceAudioInputSchema, ChangeSpeedInputSchema, ExportVideoInputSchema,
   GetVideoInfoInputSchema, CropVideoInputSchema, RotateFlipInputSchema,
   ColorAdjustInputSchema, CompressVideoInputSchema, GenerateThumbnailInputSchema,
+  NormalizeAudioInputSchema, FadeAudioInputSchema,
 } from '../../types/tools.js';
 
 const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; error?: { issues: { message: string }[] }; data?: unknown } }> = {
@@ -32,6 +33,8 @@ const TOOL_SCHEMAS: Record<string, { safeParse(v: unknown): { success: boolean; 
   get_video_info:    GetVideoInfoInputSchema,
   compress_video:       CompressVideoInputSchema,
   generate_thumbnail:   GenerateThumbnailInputSchema,
+  normalize_audio:      NormalizeAudioInputSchema,
+  fade_audio:           FadeAudioInputSchema,
 };
 
 const router = Router();

@@ -1,6 +1,7 @@
 import ffmpeg from 'fluent-ffmpeg';
-import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup } from './executor.js';
+import { tempOutputPath, runFfmpeg, runFfmpegWithCleanup, ffprobePromise } from './executor.js';
 import type { ExtractAudioInput, ReplaceAudioInput, NormalizeAudioInput, FadeAudioInput } from '../types/tools.js';
+import { AppError } from '../types/job.js';
 
 const AUDIO_QUALITY = { low: '128k', medium: '192k', high: '320k' };
 
@@ -33,13 +34,43 @@ export async function replaceAudio(input: ReplaceAudioInput, onProgress?: (p: nu
 }
 
 export async function normalizeAudio(input: NormalizeAudioInput, onProgress?: (p: number) => void): Promise<string> {
+  const probe = await ffprobePromise(input.input_file);
+  const hasAudio = probe.streams.some(s => s.codec_type === 'audio');
+  if (!hasAudio) throw new AppError(400, 'no audio stream found');
+
   const output = tempOutputPath('mp4');
-  // TODO: Implement normalize_audio
-  throw new Error('normalize_audio not yet implemented');
+  const targetLufs = input.target_lufs ?? -14;
+  const truePeak = input.true_peak ?? -1;
+  const filter = `loudnorm=I=${targetLufs}:TP=${truePeak}:LRA=11`;
+  const cmd = ffmpeg(input.input_file)
+    .outputOptions(['-c:v copy', `-af ${filter}`])
+    .output(output);
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
+  return output;
 }
 
 export async function fadeAudio(input: FadeAudioInput, onProgress?: (p: number) => void): Promise<string> {
+  const probe = await ffprobePromise(input.input_file);
+  const duration = probe.format.duration ?? 0;
+
+  let fadeIn = input.fade_in_duration ?? 0;
+  let fadeOut = input.fade_out_duration ?? 0;
+  if (fadeIn + fadeOut > duration) {
+    fadeIn = Math.min(fadeIn, duration / 2);
+    fadeOut = Math.min(fadeOut, duration / 2);
+  }
+
+  const filters: string[] = [];
+  if (fadeIn > 0) filters.push(`afade=t=in:st=0:d=${fadeIn}`);
+  if (fadeOut > 0) {
+    const fadeOutStart = duration - fadeOut;
+    filters.push(`afade=t=out:st=${fadeOutStart}:d=${fadeOut}`);
+  }
+
   const output = tempOutputPath('mp4');
-  // TODO: Implement fade_audio
-  throw new Error('fade_audio not yet implemented');
+  const cmd = ffmpeg(input.input_file)
+    .outputOptions(['-c:v copy', ...(filters.length > 0 ? [`-af ${filters.join(',')}`] : [])])
+    .output(output);
+  await runFfmpegWithCleanup(cmd, output, { onProgress });
+  return output;
 }

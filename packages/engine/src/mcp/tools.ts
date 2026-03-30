@@ -3,7 +3,7 @@ import { trimVideo } from '../ffmpeg/trim.js';
 import { compressVideo } from '../ffmpeg/compress.js';
 import { mergeClips } from '../ffmpeg/merge.js';
 import { resizeVideo } from '../ffmpeg/resize.js';
-import { extractAudio, replaceAudio } from '../ffmpeg/audio.js';
+import { extractAudio, replaceAudio, normalizeAudio, fadeAudio } from '../ffmpeg/audio.js';
 import { addTextOverlay, addSubtitles } from '../ffmpeg/text.js';
 import { changeSpeed } from '../ffmpeg/speed.js';
 import { exportVideo } from '../ffmpeg/export.js';
@@ -28,4 +28,6 @@ export const MCP_TOOLS = [
   { name: 'export_video', description: 'Re-encode and export video', schema: Schemas.ExportVideoInputSchema, handler: (i: any) => exportVideo(i).then(p => ({ output_file: p })) },
   { name: 'compress_video', description: 'Compress video with preset (web/mobile/whatsapp/telegram/archive) or target_size_mb for exact file size', schema: Schemas.CompressVideoInputSchema, handler: (i: any) => compressVideo(i).then(p => ({ output_file: p })) },
   { name: 'generate_thumbnail', description: 'Extract a thumbnail image frame from a video at a given timestamp', schema: Schemas.GenerateThumbnailInputSchema, handler: (i: any) => generateThumbnail(i).then(p => ({ output_file: p })) },
+  { name: 'normalize_audio', description: 'Normalize audio loudness to a target LUFS level', schema: Schemas.NormalizeAudioInputSchema, handler: (i: any) => normalizeAudio(i).then(p => ({ output_file: p })) },
+  { name: 'fade_audio', description: 'Apply fade in and/or fade out to audio', schema: Schemas.FadeAudioInputSchema, handler: (i: any) => fadeAudio(i).then(p => ({ output_file: p })) },
 ];
