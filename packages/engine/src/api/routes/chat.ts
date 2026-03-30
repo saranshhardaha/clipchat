@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'path';
 import type { ChatCompletionMessageToolCall } from 'openai/resources/chat/completions.js';
 import { db } from '../../db/index.js';
-import { jobs, files, chatMessages } from '../../db/schema.js';
+import { jobs, files, chatMessages, sessions } from '../../db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
 import { submitJob, generateJobId } from '../../queue/index.js';
 import { AppError } from '../../types/job.js';
@@ -51,6 +51,21 @@ const DEFAULT_SYSTEM = `You are ClipChat, a professional video editing assistant
 **Export**
 - export_video — re-encode to mp4/webm/mov/gif with quality (low/medium/high/lossless) and codec control
 
+**Compression & Export**
+- compress_video — reduce file size with presets: web, mobile, whatsapp, telegram, archive. Use target_size_mb for exact size control.
+
+**Still & Animation**
+- generate_thumbnail — extract a frame as JPG/PNG/WebP at a given timestamp
+- create_gif — create animated GIF from a segment (two-pass, palette-optimised)
+
+**Audio Enhancement**
+- normalize_audio — loudness normalisation to target LUFS (default -14 for streaming platforms)
+- fade_audio — add fade-in and/or fade-out to audio
+
+**Overlays & Effects**
+- add_watermark — overlay a logo/image at a corner or center with opacity and scale control
+- blur_region — blur a rectangle (manual coords or preset: face_top_center, lower_third, full_frame) with optional time range
+
 ## Key Rules
 
 1. **Chain tools**: The output_file from one tool becomes the input_file for the next. Never re-use the original file after it has been processed — always chain from the last output.
@@ -84,23 +99,30 @@ router.post('/chat', async (req, res, next) => {
       session = await getSession(session_id, apiKeyId);
       if (!session) throw new AppError(404, `Session '${session_id}' not found`);
     } else {
-      session = await createSession(apiKeyId, message);
+      session = await createSession(apiKeyId, message, file_id);
+    }
+
+    // Determine effective file_id: use the one from the request, or fall back to
+    // the session's stored file_id from a previous message.
+    const effectiveFileId = file_id ?? session.file_id ?? undefined;
+
+    // If a new file_id was provided for an existing session, persist it.
+    if (file_id && session_id && file_id !== session.file_id) {
+      await db.update(sessions).set({ file_id }).where(eq(sessions.id, session.id));
     }
 
     // Build system prompt, injecting the file path for tool calls
     let systemPrompt = DEFAULT_SYSTEM;
-    if (file_id) {
-      const [fileRecord] = await db.select().from(files).where(eq(files.id, file_id));
-      if (!fileRecord) throw new AppError(404, `File '${file_id}' not found`);
+    if (effectiveFileId) {
+      const [fileRecord] = await db.select().from(files).where(eq(files.id, effectiveFileId));
+      if (!fileRecord) throw new AppError(404, `File '${effectiveFileId}' not found`);
       const filePath = fileRecord.path;
       const fileName = path.basename(filePath);
       systemPrompt = `${DEFAULT_SYSTEM}\n\nThe user's video file is at path: ${filePath} (filename: ${fileName}). Use this as the input_file parameter in tool calls unless the user specifies otherwise.`;
     }
 
-    // Persist user message + build history for LLM
+    // Persist user message
     await saveUserMessage(session.id, message);
-    const allMessages = await getSessionMessages(session.id);
-    const messageHistory = buildMessageHistory(allMessages);
 
     // Start SSE stream
     res.setHeader('Content-Type', 'text/event-stream');
@@ -112,112 +134,111 @@ router.post('/chat', async (req, res, next) => {
     const client = createOpenRouterClient();
     const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-sonnet-4-5';
 
-    // --- First LLM call: stream text + collect tool calls ---
-    const abort1 = new AbortController();
-    const abort1Timer = setTimeout(() => abort1.abort(), 45_000);
+    // --- Agentic loop: keep calling LLM with tools until it produces a text-only response ---
+    // This allows multi-step workflows like: get_video_info → trim_video → synthesize
+    const MAX_ROUNDS = 5;
+    let doneMsgId = '';
 
-    const stream = await client.chat.completions.create({
-      model,
-      stream: true,
-      messages: [{ role: 'system', content: systemPrompt }, ...messageHistory],
-      tools: buildOpenRouterTools(),
-      tool_choice: 'auto',
-    }, { signal: abort1.signal });
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      // Rebuild message history each round (includes tool results from prior rounds)
+      const currentMessages = await getSessionMessages(session.id);
+      const messageHistory = buildMessageHistory(currentMessages);
 
-    // Accumulate streamed content
-    let fullText = '';
-    const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
+      const abort = new AbortController();
+      const abortTimer = setTimeout(() => abort.abort(), 45_000);
 
-    try {
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta;
-        if (!delta) continue;
+      const stream = await client.chat.completions.create({
+        model,
+        stream: true,
+        messages: [{ role: 'system', content: systemPrompt }, ...messageHistory],
+        tools: buildOpenRouterTools(),
+        tool_choice: 'auto',
+      }, { signal: abort.signal });
 
-        if (delta.content) {
-          fullText += delta.content;
-          sendEvent('text', { delta: delta.content });
-        }
+      let fullText = '';
+      const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>();
 
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const idx = tc.index;
-            if (!toolCallMap.has(idx)) {
-              toolCallMap.set(idx, { id: '', name: '', arguments: '' });
+      try {
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta;
+          if (!delta) continue;
+
+          if (delta.content) {
+            fullText += delta.content;
+            sendEvent('text', { delta: delta.content });
+          }
+
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index;
+              if (!toolCallMap.has(idx)) {
+                toolCallMap.set(idx, { id: '', name: '', arguments: '' });
+              }
+              const entry = toolCallMap.get(idx)!;
+              if (tc.id) entry.id = tc.id;
+              if (tc.function?.name) entry.name = tc.function.name;
+              if (tc.function?.arguments) entry.arguments += tc.function.arguments;
             }
-            const entry = toolCallMap.get(idx)!;
-            if (tc.id) entry.id = tc.id;
-            if (tc.function?.name) entry.name = tc.function.name;
-            if (tc.function?.arguments) entry.arguments += tc.function.arguments;
           }
         }
-      }
-    } finally {
-      clearTimeout(abort1Timer);
-    }
-
-    // --- Process accumulated tool calls: submit jobs ---
-    const completedToolCalls: ChatCompletionMessageToolCall[] = [];
-    const toolCallJobs: Array<{ toolCallId: string; jobId: string }> = [];
-    // Collect for later persistence (after assistant message)
-    const toolMessagesToSave: Array<{ toolCallId: string; content: string }> = [];
-
-    for (const [, tc] of [...toolCallMap.entries()].sort(([a], [b]) => a - b)) {
-      let input: Record<string, unknown> = {};
-      try {
-        input = JSON.parse(tc.arguments);
-      } catch (parseErr) {
-        console.warn(`[chat] Failed to parse tool call arguments for ${tc.name}:`, parseErr);
-        input = {};
+      } finally {
+        clearTimeout(abortTimer);
       }
 
-      const jobId = generateJobId();
-      await db.insert(jobs).values({
-        id: jobId, status: 'queued', tool: tc.name, input, output: null, progress: 0, error: null,
-      });
-      await submitJob(tc.name as ToolName, input, jobId);
+      const completedToolCalls: ChatCompletionMessageToolCall[] = [...toolCallMap.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([, tc]) => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: tc.arguments },
+        }));
 
-      sendEvent('tool_call', { tool: tc.name, job_id: jobId, input });
+      // Persist assistant message
+      const assistantMsg = await saveAssistantMessage(
+        session.id,
+        fullText,
+        completedToolCalls.length > 0 ? completedToolCalls : null,
+      );
+      doneMsgId = assistantMsg.id;
 
-      toolMessagesToSave.push({ toolCallId: tc.id, content: JSON.stringify({ job_id: jobId }) });
-      toolCallJobs.push({ toolCallId: tc.id, jobId });
+      // No tool calls → done
+      if (completedToolCalls.length === 0) break;
 
-      completedToolCalls.push({
-        id: tc.id,
-        type: 'function',
-        function: { name: tc.name, arguments: tc.arguments },
-      });
-    }
+      // Submit jobs for tool calls
+      const toolCallJobs: Array<{ toolCallId: string; jobId: string }> = [];
 
-    // Persist first assistant message (with tool calls)
-    const firstAssistantMsg = await saveAssistantMessage(
-      session.id,
-      fullText,
-      completedToolCalls.length > 0 ? completedToolCalls : null,
-    );
-    let doneMsgId = firstAssistantMsg.id;
+      for (const tc of completedToolCalls) {
+        let input: Record<string, unknown> = {};
+        try {
+          input = JSON.parse(tc.function.arguments);
+        } catch (parseErr) {
+          console.warn(`[chat] Failed to parse tool call arguments for ${tc.function.name}:`, parseErr);
+        }
 
-    // Save tool messages (must follow assistant message in DB)
-    for (const { toolCallId, content } of toolMessagesToSave) {
-      await saveToolMessage(session.id, toolCallId, content);
-    }
+        const jobId = generateJobId();
+        await db.insert(jobs).values({
+          id: jobId, status: 'queued', tool: tc.function.name, input, output: null, progress: 0, error: null,
+        });
+        await submitJob(tc.function.name as ToolName, input, jobId);
 
-    // --- Poll jobs until all complete (max 60s) ---
-    if (toolCallJobs.length > 0) {
-      const SYNTHESIS_TIMEOUT = 60_000;
+        sendEvent('tool_call', { tool: tc.function.name, job_id: jobId, input });
+        await saveToolMessage(session.id, tc.id, JSON.stringify({ job_id: jobId }));
+        toolCallJobs.push({ toolCallId: tc.id, jobId });
+      }
+
+      // Poll jobs until all complete (max 60s per round)
+      const POLL_TIMEOUT = 60_000;
       const POLL_INTERVAL = 1_000;
       const pollStart = Date.now();
       const jobResults = new Map<string, { status: string; output: unknown; error: string | null }>();
       const toolCallIdByJobId = new Map(toolCallJobs.map(t => [t.jobId, t.toolCallId]));
 
-      while (Date.now() - pollStart < SYNTHESIS_TIMEOUT) {
-        const pendingIds = toolCallJobs
-          .filter(t => !jobResults.has(t.jobId))
-          .map(t => t.jobId);
+      while (Date.now() - pollStart < POLL_TIMEOUT) {
+        const pendingIds = toolCallJobs.filter(t => !jobResults.has(t.jobId)).map(t => t.jobId);
         if (pendingIds.length === 0) break;
 
         await new Promise<void>(r => setTimeout(r, POLL_INTERVAL));
 
-        // Batch query — one DB round-trip per poll cycle regardless of job count
         const rows = await db.select().from(jobs).where(inArray(jobs.id, pendingIds));
         for (const row of rows) {
           if (row.status === 'completed' || row.status === 'failed') {
@@ -232,41 +253,10 @@ router.post('/chat', async (req, res, next) => {
         }
       }
 
-      // --- Second LLM call: synthesis ---
-      // Only synthesize if at least one job completed (skip if all timed out)
-      if (jobResults.size > 0) {
-        // Rebuild message history (now includes updated tool results)
-        const updatedMessages = await getSessionMessages(session.id);
-        const synthesisHistory = buildMessageHistory(updatedMessages);
-
-        const abort2 = new AbortController();
-        const abort2Timer = setTimeout(() => abort2.abort(), 45_000);
-
-        let synthesisText = '';
-        try {
-          const synthesisStream = await client.chat.completions.create({
-            model,
-            stream: true,
-            messages: [{ role: 'system', content: systemPrompt }, ...synthesisHistory],
-            // No tools on synthesis call — just generate text response
-          }, { signal: abort2.signal });
-
-          for await (const chunk of synthesisStream) {
-            const delta = chunk.choices[0]?.delta?.content ?? '';
-            if (delta) {
-              synthesisText += delta;
-              sendEvent('text', { delta });
-            }
-          }
-        } finally {
-          clearTimeout(abort2Timer);
-        }
-
-        // Persist synthesis message
-        if (synthesisText) {
-          const synthMsg = await saveAssistantMessage(session.id, synthesisText, null);
-          doneMsgId = synthMsg.id;
-        }
+      // If any jobs timed out, stop the loop (can't synthesize without results)
+      if (toolCallJobs.some(t => !jobResults.has(t.jobId))) {
+        console.warn('[chat] Some jobs timed out in round', round + 1);
+        break;
       }
     }
 

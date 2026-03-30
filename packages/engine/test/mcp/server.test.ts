@@ -6,7 +6,7 @@ describe('MCP Server', () => {
     const server = createMcpServer();
     // @ts-ignore — access internal tool registry for testing
     const tools = server._registeredTools;
-    expect(Object.keys(tools)).toHaveLength(19);
+    expect(Object.keys(tools)).toHaveLength(20);
     expect(Object.keys(tools)).toContain('trim_video');
     expect(Object.keys(tools)).toContain('get_video_info');
   });
