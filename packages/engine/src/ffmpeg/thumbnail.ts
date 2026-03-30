@@ -14,7 +14,7 @@ export async function generateThumbnail(input: GenerateThumbnailInput, onProgres
   if (format === 'jpg') {
     cmd = cmd.outputOptions(['-q:v 2']);
   } else if (format === 'webp') {
-    cmd = cmd.outputOptions(['-quality 85']);
+    cmd = cmd.outputOptions(['-q:v 85']);
   }
   cmd = cmd.output(output);
   await runFfmpegWithCleanup(cmd, output, { onProgress });
