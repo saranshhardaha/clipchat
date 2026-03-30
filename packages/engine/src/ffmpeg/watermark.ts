@@ -21,14 +21,14 @@ export async function addWatermark(input: AddWatermarkInput, onProgress?: (p: nu
 
   // Scale watermark to fraction of video width, apply opacity, then overlay
   const filterComplex = [
-    `[1:v]scale=iw*${scale}:-1,format=rgba,colorchannelmixer=aa=${opacity}[wm]`,
+    `[1:v]scale=iw*${scale}:-2,format=rgba,colorchannelmixer=aa=${opacity}[wm]`,
     `[0:v][wm]overlay=${x}:${y}`,
   ].join(';');
 
   const cmd = ffmpeg(input.input_file)
     .input(input.watermark_file)
     .complexFilter(filterComplex)
-    .outputOptions(['-c:a copy'])
+    .outputOptions(['-map 0:a?', '-c:a copy'])
     .output(output);
   await runFfmpegWithCleanup(cmd, output, { onProgress });
   return output;
